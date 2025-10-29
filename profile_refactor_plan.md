@@ -293,7 +293,7 @@ sqlc/
    - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
    - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
    - [x] 抽象服务接口（`services/interfaces.go`），供控制层测试替换实现。
-   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。（2025-10-29：新增 `internal/services/test/watch_history_service_test.go`、`internal/services/test/engagement_service_test.go`、`internal/services/test/profile_service_test.go`、`internal/services/test/video_projection_service_test.go`，并补充 `internal/services/test/profile_service_gomock_test.go`、`video_projection_service_mock_test.go` 使用 gomock 验证仓储错误；其余服务待补更细覆盖）
+   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。（2025-10-29：新增集成测试 `internal/services/test/watch_history_service_test.go` 等，并补充 gomock 单测 `profile_service_gomock_test.go`、`video_projection_service_mock_test.go`、`watch_history_service_gomock_test.go`、`engagement_service_gomock_test.go` 验证错误路径；VideoStats 等辅助服务仍可扩展）
 
 6. **控制器与 DTO**
    - [x] 合并 Profile 相关 RPC 到 `profile_handler.go`，移除模板遗留的 lifecycle/query handler。

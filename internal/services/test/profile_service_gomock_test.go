@@ -10,11 +10,9 @@ import (
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/services"
 	"github.com/bionicotaku/lingo-services-profile/internal/services/mocks"
-	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,22 +72,3 @@ func TestProfileService_UpdatePreferences_NotFound(t *testing.T) {
 	})
 	require.ErrorIs(t, err, services.ErrProfileNotFound)
 }
-
-// fakeTxManager executes the callback without opening a real transaction.
-type fakeTxManager struct{}
-
-type fakeSession struct{ context context.Context }
-
-func (fakeTxManager) WithinTx(ctx context.Context, _ txmanager.TxOptions, fn func(context.Context, txmanager.Session) error) error {
-	return fn(ctx, fakeSession{context: ctx})
-}
-
-func (fakeTxManager) WithinReadOnlyTx(ctx context.Context, _ txmanager.TxOptions, fn func(context.Context, txmanager.Session) error) error {
-	return fn(ctx, fakeSession{context: ctx})
-}
-
-func (fakeSession) Tx() pgx.Tx                 { return nil }
-func (s fakeSession) Context() context.Context { return s.context }
-
-func ptrString(v string) *string { return &v }
-func ptrInt64(v int64) *int64    { return &v }

@@ -10,26 +10,42 @@ import (
 	"github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
-
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 )
 
+// WatchLogsRepository 抽象 watch_logs 仓储行为，便于测试替换。
+type WatchLogsRepository interface {
+	Get(ctx context.Context, sess txmanager.Session, userID, videoID uuid.UUID) (*po.ProfileWatchLog, error)
+	Upsert(ctx context.Context, sess txmanager.Session, input repositories.UpsertWatchLogInput) error
+	ListByUser(ctx context.Context, sess txmanager.Session, userID uuid.UUID, includeRedacted bool, limit, offset int32) ([]*po.ProfileWatchLog, error)
+}
+
+// WatchStatsRepository 抽象视频统计仓储行为。
+type WatchStatsRepository interface {
+	Increment(ctx context.Context, sess txmanager.Session, videoID uuid.UUID, likeDelta, bookmarkDelta, watcherDelta, secondsDelta int64) error
+}
+
+// OutboxEnqueuer 抽象 Outbox 写入行为，供服务层与测试复用。
+type OutboxEnqueuer interface {
+	Enqueue(ctx context.Context, sess txmanager.Session, msg repositories.OutboxMessage) error
+}
+
 // WatchHistoryService 负责观看进度写入与查询。
 type WatchHistoryService struct {
-	logs      *repositories.ProfileWatchLogsRepository
-	stats     *repositories.ProfileVideoStatsRepository
-	outbox    *repositories.OutboxRepository
+	logs      WatchLogsRepository
+	stats     WatchStatsRepository
+	outbox    OutboxEnqueuer
 	txManager txmanager.Manager
 	log       *log.Helper
 }
 
 // NewWatchHistoryService 构造 WatchHistoryService。
 func NewWatchHistoryService(
-	logs *repositories.ProfileWatchLogsRepository,
-	stats *repositories.ProfileVideoStatsRepository,
-	outbox *repositories.OutboxRepository,
+	logs WatchLogsRepository,
+	stats WatchStatsRepository,
+	outbox OutboxEnqueuer,
 	tx txmanager.Manager,
 	logger log.Logger,
 ) *WatchHistoryService {

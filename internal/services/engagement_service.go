@@ -9,12 +9,25 @@ import (
 	"github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
-
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
+
+// EngagementsRepository 抽象互动仓储行为。
+type EngagementsRepository interface {
+	Upsert(ctx context.Context, sess txmanager.Session, input repositories.UpsertProfileEngagementInput) error
+	SoftDelete(ctx context.Context, sess txmanager.Session, input repositories.SoftDeleteProfileEngagementInput) error
+	Get(ctx context.Context, sess txmanager.Session, userID, videoID uuid.UUID, engagementType string) (*po.ProfileEngagement, error)
+	ListByUser(ctx context.Context, sess txmanager.Session, userID uuid.UUID, engagementType *string, includeDeleted bool, limit, offset int32) ([]*po.ProfileEngagement, error)
+}
+
+// EngagementStatsRepository 抽象视频统计增量行为。
+type EngagementStatsRepository interface {
+	Increment(ctx context.Context, sess txmanager.Session, videoID uuid.UUID, likeDelta, bookmarkDelta, watcherDelta, secondsDelta int64) error
+	Get(ctx context.Context, sess txmanager.Session, videoID uuid.UUID) (*po.ProfileVideoStats, error)
+}
 
 // EngagementAction 指定互动动作。
 type EngagementAction string
@@ -31,18 +44,18 @@ var ErrUnsupportedEngagementType = errors.New("unsupported engagement type")
 
 // EngagementService 处理收藏/点赞等互动逻辑。
 type EngagementService struct {
-	engagements *repositories.ProfileEngagementsRepository
-	stats       *repositories.ProfileVideoStatsRepository
-	outbox      *repositories.OutboxRepository
+	engagements EngagementsRepository
+	stats       EngagementStatsRepository
+	outbox      OutboxEnqueuer
 	txManager   txmanager.Manager
 	log         *log.Helper
 }
 
 // NewEngagementService 构造 EngagementService。
 func NewEngagementService(
-	engagements *repositories.ProfileEngagementsRepository,
-	stats *repositories.ProfileVideoStatsRepository,
-	outbox *repositories.OutboxRepository,
+	engagements EngagementsRepository,
+	stats EngagementStatsRepository,
+	outbox OutboxEnqueuer,
 	tx txmanager.Manager,
 	logger log.Logger,
 ) *EngagementService {
