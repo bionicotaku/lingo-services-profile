@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
+	"github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 
@@ -18,6 +20,7 @@ import (
 type WatchHistoryService struct {
 	logs      *repositories.ProfileWatchLogsRepository
 	stats     *repositories.ProfileVideoStatsRepository
+	outbox    *repositories.OutboxRepository
 	txManager txmanager.Manager
 	log       *log.Helper
 }
@@ -26,12 +29,14 @@ type WatchHistoryService struct {
 func NewWatchHistoryService(
 	logs *repositories.ProfileWatchLogsRepository,
 	stats *repositories.ProfileVideoStatsRepository,
+	outbox *repositories.OutboxRepository,
 	tx txmanager.Manager,
 	logger log.Logger,
 ) *WatchHistoryService {
 	return &WatchHistoryService{
 		logs:      logs,
 		stats:     stats,
+		outbox:    outbox,
 		txManager: tx,
 		log:       log.NewHelper(logger),
 	}
@@ -64,7 +69,10 @@ func (s *WatchHistoryService) UpsertProgress(ctx context.Context, input UpsertWa
 			return err
 		}
 
-		deltaSeconds := input.TotalWatchSeconds
+		deltaSeconds := computeWatchSecondsDelta(existing, input.TotalWatchSeconds)
+		if deltaSeconds < 0 {
+			deltaSeconds = 0
+		}
 		increment := repositories.UpsertWatchLogInput{
 			UserID:              input.UserID,
 			VideoID:             input.VideoID,
@@ -88,15 +96,27 @@ func (s *WatchHistoryService) UpsertProgress(ctx context.Context, input UpsertWa
 		result = updated
 
 		if s.stats != nil {
-			watcherDelta := int64(0)
-			if existing == nil {
-				watcherDelta = 1
-			}
-			secondsDelta := int64(deltaSeconds)
+			watcherDelta := computeWatcherDelta(existing, updated)
+			secondsDelta := int64(math.Round(deltaSeconds))
 			if secondsDelta != 0 || watcherDelta != 0 {
 				if err := s.stats.Increment(txCtx, sess, input.VideoID, 0, 0, watcherDelta, secondsDelta); err != nil {
 					return err
 				}
+			}
+		}
+
+		if s.outbox != nil && shouldEmitWatchEvent(existing, updated) {
+			occurredAt := updated.LastWatchedAt
+			evt, err := outboxevents.NewProfileWatchProgressedEvent(input.UserID, input.VideoID, updated, occurredAt, input.SessionID, nil)
+			if err != nil {
+				return err
+			}
+			msg, err := buildOutboxMessage(evt)
+			if err != nil {
+				return err
+			}
+			if err := s.outbox.Enqueue(txCtx, sess, msg); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -125,4 +145,56 @@ func (s *WatchHistoryService) ListWatchHistory(ctx context.Context, input ListWa
 		return nil, fmt.Errorf("list watch history: %w", err)
 	}
 	return items, nil
+}
+
+const (
+	progressQualifiedThreshold = 0.05
+	progressDeltaThreshold     = 0.05
+)
+
+func computeWatchSecondsDelta(existing *po.ProfileWatchLog, newTotal float64) float64 {
+	if existing == nil {
+		if newTotal < 0 {
+			return 0
+		}
+		return newTotal
+	}
+	delta := newTotal - existing.TotalWatchSeconds
+	if delta < 0 {
+		return 0
+	}
+	return delta
+}
+
+func computeWatcherDelta(existing, updated *po.ProfileWatchLog) int64 {
+	if updated == nil {
+		return 0
+	}
+	newQualified := updated.ProgressRatio >= progressQualifiedThreshold
+	oldQualified := existing != nil && existing.ProgressRatio >= progressQualifiedThreshold
+	switch {
+	case !oldQualified && newQualified:
+		return 1
+	case oldQualified && !newQualified:
+		return -1
+	default:
+		return 0
+	}
+}
+
+func shouldEmitWatchEvent(existing, updated *po.ProfileWatchLog) bool {
+	if updated == nil {
+		return false
+	}
+	if updated.ProgressRatio < progressQualifiedThreshold {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	if existing.ProgressRatio < progressQualifiedThreshold {
+		return true
+	}
+	delta := updated.ProgressRatio - existing.ProgressRatio
+	return delta >= progressDeltaThreshold
 }

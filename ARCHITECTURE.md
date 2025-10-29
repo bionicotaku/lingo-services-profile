@@ -358,7 +358,7 @@ end$$;
 #### `profile.outbox_events`
 - 完全复用模板 Outbox 表结构：`event_id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload`, `headers`, `occurred_at`, `available_at`, `published_at`, `delivery_attempts`, `last_error`, `lock_token`, `locked_at`。
 
-> **Outbox / Inbox 工作流**：写路径复用模板 Outbox；当点赞/收藏/观看统计更新时分别写入 `profile.engagement.added/removed`、`profile.watch.progressed` 事件。`profile.watch.progressed` 仅在首次观看或进度变化 ≥5% 时发出，避免播放心跳导致事件风暴；若后续吞吐增长，再考虑批量/定时聚合。读路径通过 StreamingPull 订阅 `catalog.video.events`。每次消费事件：
+> **Outbox / Inbox 工作流**：写路径复用模板 Outbox；当点赞/收藏/观看统计更新时分别写入 `profile.engagement.added/removed`、`profile.watch.progressed` 事件。`profile.watch.progressed` 仅在首次观看或进度变化 ≥5% 时发出，避免播放心跳导致事件风暴；若后续吞吐增长，再考虑批量/定时聚合。读路径通过 StreamingPull 订阅 `catalog.video.events`（现由 `internal/tasks/catalog_inbox` Runner 实现，并可通过 `cmd/tasks/catalog_inbox` 独立运行）。每次消费事件：
 > 1. 事务内 `INSERT` 至 `profile.inbox_events`（以 `event_id` 幂等）。
 > 2. 对比事件 `version` 与 `profile.videos_projection.version`，若更大则 `UPSERT`。
 > 3. 同事务可选更新 `profile.subscription_offsets`（post-MVP，记录 message_id/publish_time/lag）。
@@ -406,6 +406,9 @@ services-profile/
 ```
 
 - **缓存策略**：`services/internal/infrastructure/cache` 提供基于本地 LRU / future Redis 的可插拔缓存；收藏状态缓存 TTL ≤ 60s，写入后立即失效。
+- **后台任务**：
+  - Outbox 发布器：`cmd/tasks/outbox` + `internal/tasks/outbox`，负责发布 `profile.engagement.*` 与 `profile.watch.progressed` 事件。
+  - Catalog Inbox：`cmd/tasks/catalog_inbox` + `internal/tasks/catalog_inbox`，消费 `catalog.video.*` 事件并幂等刷新 `profile.videos_projection`，同步输出 `catalog_inbox_*` 指标。
 - **Idempotency**：写接口复用模板中的 `pkg/idempotency`，键格式 `profile:<user_id>:<action>:<resource_id>`。
 
 ---

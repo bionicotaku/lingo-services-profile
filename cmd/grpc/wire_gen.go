@@ -104,7 +104,7 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	outboxRepository := repositories.NewOutboxRepository(pool, logger, configConfig)
 	engagementService := services.NewEngagementService(profileEngagementsRepository, profileVideoStatsRepository, outboxRepository, manager, logger)
 	profileWatchLogsRepository := repositories.NewProfileWatchLogsRepository(pool, logger)
-	watchHistoryService := services.NewWatchHistoryService(profileWatchLogsRepository, profileVideoStatsRepository, manager, logger)
+	watchHistoryService := services.NewWatchHistoryService(profileWatchLogsRepository, profileVideoStatsRepository, outboxRepository, manager, logger)
 	profileVideoProjectionRepository := repositories.NewProfileVideoProjectionRepository(pool, logger)
 	videoProjectionService := services.NewVideoProjectionService(profileVideoProjectionRepository, logger)
 	videoStatsService := services.NewVideoStatsService(profileVideoStatsRepository, logger)

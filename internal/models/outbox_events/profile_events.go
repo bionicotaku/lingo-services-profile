@@ -68,3 +68,41 @@ func NewProfileEngagementRemovedEvent(userID, videoID uuid.UUID, engagementType 
 	}
 	return evt, nil
 }
+
+// NewProfileWatchProgressedEvent 构造观看进度更新事件。
+func NewProfileWatchProgressedEvent(userID, videoID uuid.UUID, progress *po.ProfileWatchLog, occurredAt time.Time, sessionID string, ctx map[string]any) (*DomainEvent, error) {
+	if userID == uuid.Nil {
+		return nil, fmt.Errorf("watch progressed event: user_id required")
+	}
+	if videoID == uuid.Nil {
+		return nil, fmt.Errorf("watch progressed event: video_id required")
+	}
+	if progress == nil {
+		return nil, fmt.Errorf("watch progressed event: progress required")
+	}
+	eventTime := occurredAt
+	if eventTime.IsZero() {
+		eventTime = progress.LastWatchedAt
+	}
+	if eventTime.IsZero() {
+		eventTime = time.Now().UTC()
+	} else {
+		eventTime = eventTime.UTC()
+	}
+	evt := &DomainEvent{
+		EventID:       uuid.New(),
+		Kind:          KindProfileWatchProgressed,
+		AggregateID:   videoID,
+		AggregateType: AggregateTypeProfileWatchLog,
+		Version:       VersionFromTime(eventTime),
+		OccurredAt:    eventTime,
+		Payload: &ProfileWatchProgressed{
+			UserID:    userID,
+			VideoID:   videoID,
+			Progress:  progress,
+			SessionID: sessionID,
+			Context:   ctx,
+		},
+	}
+	return evt, nil
+}

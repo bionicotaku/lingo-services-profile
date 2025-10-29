@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 type profileServiceStub struct {
@@ -201,6 +202,64 @@ func TestProfileHandler_MutateFavorite_MapsInput(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.GetState().GetHasBookmarked())
 	require.EqualValues(t, 3, resp.GetStats().GetBookmarkCount())
+}
+
+func TestProfileHandler_UpdateProfile_ConflictMapsToAborted(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	profiles := &profileServiceStub{
+		updateProfileFn: func(context.Context, services.UpdateProfileInput) (*vo.Profile, error) {
+			return nil, services.ErrProfileVersionConflict
+		},
+	}
+	handler := controllers.NewProfileHandler(
+		profiles,
+		&engagementServiceStub{},
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, userID)
+	_, err := handler.UpdateProfile(ctx, &profilev1.UpdateProfileRequest{
+		Profile:    &profilev1.Profile{DisplayName: "Alice"},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"display_name"}},
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	require.Equal(t, codes.Aborted, st.Code())
+}
+
+func TestProfileHandler_MutateFavorite_UnsupportedTypeReturnsInvalidArgument(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	videoID := uuid.New()
+	engSvc := &engagementServiceStub{
+		mutateFn: func(context.Context, services.MutateEngagementInput) error {
+			return services.ErrUnsupportedEngagementType
+		},
+	}
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		engSvc,
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, userID)
+	_, err := handler.MutateFavorite(ctx, &profilev1.MutateFavoriteRequest{
+		VideoId:      videoID.String(),
+		FavoriteType: profilev1.FavoriteType_FAVORITE_TYPE_LIKE,
+		Action:       profilev1.FavoriteAction_FAVORITE_ACTION_ADD,
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	require.Equal(t, codes.InvalidArgument, st.Code())
 }
 
 func TestProfileHandler_GetProfile_MissingUserID(t *testing.T) {
