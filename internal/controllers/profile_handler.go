@@ -32,20 +32,20 @@ type ProfileHandler struct {
 	profilev1.UnimplementedProfileServiceServer
 
 	*BaseHandler
-	profiles     *services.ProfileService
-	engagements  *services.EngagementService
-	watchHistory *services.WatchHistoryService
-	projections  *services.VideoProjectionService
-	stats        *services.VideoStatsService
+	profiles     services.ProfileServiceInterface
+	engagements  services.EngagementServiceInterface
+	watchHistory services.WatchHistoryServiceInterface
+	projections  services.VideoProjectionServiceInterface
+	stats        services.VideoStatsServiceInterface
 }
 
 // NewProfileHandler 构造 ProfileHandler。
 func NewProfileHandler(
-	profiles *services.ProfileService,
-	engagements *services.EngagementService,
-	watchHistory *services.WatchHistoryService,
-	projections *services.VideoProjectionService,
-	stats *services.VideoStatsService,
+	profiles services.ProfileServiceInterface,
+	engagements services.EngagementServiceInterface,
+	watchHistory services.WatchHistoryServiceInterface,
+	projections services.VideoProjectionServiceInterface,
+	stats services.VideoStatsServiceInterface,
 	base *BaseHandler,
 ) *ProfileHandler {
 	if base == nil {

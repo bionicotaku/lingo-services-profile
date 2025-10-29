@@ -51,7 +51,12 @@ func wireApp(context.Context, configloader.Params) (*kratos.App, func(), error) 
 		// clients.ProviderSet,    // 暂时不使用, 未来需要调用外部服务时再启用
 		repositories.ProviderSet, // 数据访问层（sqlc）
 		services.ProviderSet,     // 业务逻辑层
-		controllers.ProviderSet,  // 控制器层（gRPC handlers）
+		wire.Bind(new(services.ProfileServiceInterface), new(*services.ProfileService)),
+		wire.Bind(new(services.EngagementServiceInterface), new(*services.EngagementService)),
+		wire.Bind(new(services.WatchHistoryServiceInterface), new(*services.WatchHistoryService)),
+		wire.Bind(new(services.VideoProjectionServiceInterface), new(*services.VideoProjectionService)),
+		wire.Bind(new(services.VideoStatsServiceInterface), new(*services.VideoStatsService)),
+		controllers.ProviderSet, // 控制器层（gRPC handlers）
 		outboxtasks.ProvideRunner,
 		newApp, // 组装 Kratos 应用
 	))

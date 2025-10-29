@@ -1,3 +1,4 @@
+// Package mappers 提供数据库行与领域模型之间的转换工具。
 package mappers
 
 import (

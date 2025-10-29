@@ -1,3 +1,4 @@
+// Package repositories 封装 Profile 服务的数据访问实现。
 package repositories
 
 import (

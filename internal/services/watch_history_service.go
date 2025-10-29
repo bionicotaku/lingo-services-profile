@@ -126,7 +126,3 @@ func (s *WatchHistoryService) ListWatchHistory(ctx context.Context, input ListWa
 	}
 	return items, nil
 }
-
-func errorsIsWatchLogNotFound(err error) bool {
-	return err != nil && errors.Is(err, repositories.ErrProfileWatchLogNotFound)
-}

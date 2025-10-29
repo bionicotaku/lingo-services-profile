@@ -1,3 +1,4 @@
+// Package vo 定义 Profile 服务在控制器与外部交互使用的视图对象。
 package vo
 
 import (

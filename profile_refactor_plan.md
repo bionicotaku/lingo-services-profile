@@ -259,7 +259,7 @@ sqlc/
 1. **契约与文档**（进行中）
    - [x] 创建 `api/profile/v1/profile.proto`（定义 RPC、消息、枚举、错误码）。
    - [x] 新建 `api/profile/v1/events.proto`（Outbox 事件 payload）。
-   - [ ] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；清理未使用的 `api/video/v1` 契约或迁移至 `_legacy` 目录。
+   - [x] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；清理未使用的 `api/video/v1` 契约（2025-10-29 已删除并重新生成）。
    - [x] 运行 `buf generate && gofumpt && goimports`，确保 `buf lint && buf breaking` 通过。
    - [ ] 更新 REST/OpenAPI 文档（若存在）：新增 Profile 端点、Problem 详情、示例请求。（尚未执行，待新接口定义稳定后补齐）
    - [ ] 更新 `docs/api` 或 README 中的 API 索引链接。（尚未执行）
@@ -290,20 +290,21 @@ sqlc/
    - [x] 新建 `EngagementService`，处理点赞/收藏写入、事件发布、缓存失效。（事件发布将与 Outbox 集成阶段补充）
    - [x] 新建 `WatchHistoryService`，处理进度上报、5% 阈值判断、watch log TTL、视频统计累加。（事件节流后续配合任务实现）
    - [x] 新建 `VideoProjectionService`，消费 Catalog 事件更新投影。（当前提供 Upsert/Query，事件消费稍后在任务阶段补充）
- - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
-  - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
-  - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。
+   - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
+   - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
+   - [x] 抽象服务接口（`services/interfaces.go`），供控制层测试替换实现。
+   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。
 
 6. **控制器与 DTO**
    - [x] 合并 Profile 相关 RPC 到 `profile_handler.go`，移除模板遗留的 lifecycle/query handler。
    - [x] 精简 DTO：保留 `dto/profile.go` 处理 gRPC ↔︎ VO 转换，后续按需扩展分页辅助。
    - [x] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
    - [x] 更新 `internal/controllers/init.go` 与 gRPC Server wiring，仅注册 Profile gRPC 服务。
-   - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时。
+   - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时。（2025-10-29：已引入服务接口并添加基础单测 `internal/controllers/test/profile_handler_profile_test.go` 覆盖元数据缺失、参数校验、错误映射，仍需补充更多场景）
 
 7. **异步任务与事件链路**
-   - [ ] 更新 `internal/tasks/outbox`，实现 Profile 事件编码与指标埋点（当前仅沿用模板 Publisher）。
-   - [ ] 新建 `internal/tasks/catalog_inbox` Runner（订阅 Catalog 事件，维护 `profile.videos_projection`）。 
+   - [ ] 更新 `internal/services/engagement_service.go` / outbox pipeline：目前已在 `Mutate` 中发布 `profile.engagement.*` Outbox 事件（含统计快照），仍需整合 WatchProgress 事件与任务指标。
+   - [ ] 新建 `internal/tasks/catalog_inbox` Runner（订阅 Catalog 事件，维护 `profile.videos_projection`）。
    - [ ] 设计 Profile 自身的 Inbox/聚合任务，替代已删除的 engagement runner。
    - [ ] 添加任务级测试：模拟消息、校验幂等、监控指标。
 
@@ -315,7 +316,7 @@ sqlc/
 
 9. **质量与验证**
    - [ ] `make lint`（含 gofumpt、goimports、staticcheck、revive、buf、spectral）。
-   - [ ] `go test ./...`（确保服务/仓储/任务测试覆盖率目标达成）。（2025-10-29：本轮已手动执行，全部通过，后续纳入 pipeline）
+   - [x] `go test ./...`（确保服务/仓储/任务测试覆盖率目标达成）。（2025-10-29：本轮已手动执行，全部通过，后续纳入 pipeline）
    - [ ] `sqlc generate`、`buf lint && buf breaking`、`spectral lint`、`make proto`（若依赖）。
    - [ ] 编写 e2e 脚本 `test/e2e/profile_flow_test.sh` 并运行一次完整流程。
 
@@ -344,7 +345,41 @@ sqlc/
 
 ---
 
-## 13. 后续扩展（Post-MVP）
+## 13. 未来文件结构基线
+
+为避免再次引入 legacy 代码，后续开发需遵循如下目录与职责划分：
+
+```
+services-profile/
+├─ api/
+│  └─ profile/v1/              # Profile gRPC/事件 proto；禁止新增 video/**
+├─ cmd/
+│  ├─ grpc/                    # gRPC 入口（wire + main），仅注册 Profile handler
+│  └─ tasks/outbox/            # Outbox runner 入口；未来 catalog inbox 任务放此目录
+├─ configs/                    # config.yaml、conf.proto（schema=profile）
+├─ internal/
+│  ├─ controllers/             # 控制层（profile_handler.go + dto/），只依赖 service 接口
+│  ├─ services/                # 业务用例，保留 interfaces.go + 各 service 实现
+│  ├─ repositories/            # Profile schema 仓储、Outbox/Inbox repo、mappers
+│  ├─ models/
+│  │  ├─ po/                   # 持久化对象
+│  │  ├─ vo/                   # 视图对象
+│  │  └─ outbox_events/        # Profile 领域事件及 proto 编码
+│  ├─ infrastructure/          # configloader、grpc_server 等底层装配
+│  └─ tasks/                   # Outbox/InBox/定时任务（按子目录区分）
+├─ migrations/                 # 仅 profile schema 迁移（101_ 开头）
+├─ sqlc/                       # profile schema SQL 定义
+└─ profile_refactor_plan.md    # 重构与执行追踪
+```
+
+**结构约束：**
+1. controllers 只能依赖 `services` 接口，不得直接访问仓储/模型。
+2. services 仅依赖 repositories、models、pkg 工具；若需新增 cross-service 调用，应放在 `internal/clients/` 并由 service 注入。
+3. repositories 只允许访问 `profile.*` schema；跨服务数据需通过事件或客户端。
+4. Outbox/InBox 任务统一放在 `internal/tasks` 下，按功能拆分子目录，确保可测试性。
+5. `api/` 目录只保留 Profile 契约，如需 legacy 契约必须放在 `_legacy` 并注明迁移计划。
+
+## 14. 后续扩展（Post-MVP）
 
 - 拆分 `profile.preferences` 独立表，启用 `supabase_sub`、`account_status` 字段。
 - Watch log pruner & 分区策略，降低历史数据膨胀。

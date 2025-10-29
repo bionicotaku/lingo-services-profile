@@ -1,3 +1,4 @@
+// Package dto 提供控制层与 protobuf 之间的转换工具。
 package dto
 
 import (
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// ToProtoProfile 将领域视图对象转换为 gRPC Profile。
 func ToProtoProfile(profile *vo.Profile) *profilev1.Profile {
 	if profile == nil {
 		return nil
@@ -37,6 +39,7 @@ func toProtoPreferences(prefs vo.Preferences) *profilev1.Preferences {
 	return proto
 }
 
+// ToProtoFavoriteState 转换收藏状态。
 func ToProtoFavoriteState(state vo.FavoriteState) *profilev1.FavoriteState {
 	return &profilev1.FavoriteState{
 		HasLiked:      state.HasLiked,
@@ -46,6 +49,7 @@ func ToProtoFavoriteState(state vo.FavoriteState) *profilev1.FavoriteState {
 	}
 }
 
+// ToProtoVideoStats 转换视频聚合统计。
 func ToProtoVideoStats(stats *vo.ProfileVideoStats) *profilev1.VideoStats {
 	if stats == nil {
 		return nil
@@ -59,6 +63,7 @@ func ToProtoVideoStats(stats *vo.ProfileVideoStats) *profilev1.VideoStats {
 	}
 }
 
+// ToProtoVideoMetadata 转换视频元数据补水信息。
 func ToProtoVideoMetadata(meta *vo.ProfileVideoMetadata) *profilev1.VideoMetadata {
 	if meta == nil {
 		return nil
@@ -78,6 +83,7 @@ func ToProtoVideoMetadata(meta *vo.ProfileVideoMetadata) *profilev1.VideoMetadat
 	}
 }
 
+// ToProtoWatchProgress 转换观看进度信息。
 func ToProtoWatchProgress(progress *vo.WatchProgress) *profilev1.WatchProgress {
 	if progress == nil {
 		return nil
