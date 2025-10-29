@@ -1362,7 +1362,7 @@ const file_api_video_v1_events_proto_rawDesc = "" +
 	"\x1cEVENT_TYPE_VIDEO_MEDIA_READY\x10\x04\x12 \n" +
 	"\x1cEVENT_TYPE_VIDEO_AI_ENRICHED\x10\x05\x12&\n" +
 	"\"EVENT_TYPE_VIDEO_PROCESSING_FAILED\x10\x06\x12'\n" +
-	"#EVENT_TYPE_VIDEO_VISIBILITY_CHANGED\x10\aBDZBgithub.com/bionicotaku/lingo-services-catalog/api/video/v1;videov1b\x06proto3"
+	"#EVENT_TYPE_VIDEO_VISIBILITY_CHANGED\x10\aBDZBgithub.com/bionicotaku/lingo-services-profile/api/video/v1;videov1b\x06proto3"
 
 var (
 	file_api_video_v1_events_proto_rawDescOnce sync.Once

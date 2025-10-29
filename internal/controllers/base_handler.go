@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	metadata "github.com/bionicotaku/lingo-services-catalog/internal/metadata"
+	metadata "github.com/bionicotaku/lingo-services-profile/internal/metadata"
 	grpcmetadata "google.golang.org/grpc/metadata"
 )
 

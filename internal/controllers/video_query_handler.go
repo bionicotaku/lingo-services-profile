@@ -3,9 +3,9 @@ package controllers
 import (
 	"context"
 
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	"github.com/bionicotaku/lingo-services-catalog/internal/controllers/dto"
-	"github.com/bionicotaku/lingo-services-catalog/internal/services"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	"github.com/bionicotaku/lingo-services-profile/internal/controllers/dto"
+	"github.com/bionicotaku/lingo-services-profile/internal/services"
 
 	"github.com/go-kratos/kratos/v2/errors"
 )

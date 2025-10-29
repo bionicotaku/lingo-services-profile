@@ -3,9 +3,9 @@
 package grpcserver
 
 import (
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	"github.com/bionicotaku/lingo-services-catalog/internal/controllers"
-	configloader "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/configloader"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
+	configloader "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
 
 	"github.com/bionicotaku/lingo-utils/gcjwt"
 	"github.com/bionicotaku/lingo-utils/observability"

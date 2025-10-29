@@ -1,4 +1,4 @@
-module github.com/bionicotaku/lingo-services-catalog
+module github.com/bionicotaku/lingo-services-profile
 
 go 1.25.3
 

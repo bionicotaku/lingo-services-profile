@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	configloader "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/configloader"
-	grpcserver "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/grpc_server"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	configloader "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
+	grpcserver "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
 	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 
 	"github.com/bionicotaku/lingo-utils/gcjwt"

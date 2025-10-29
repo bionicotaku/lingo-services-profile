@@ -6,7 +6,7 @@ import (
 	outboxcfg "github.com/bionicotaku/lingo-utils/outbox/config"
 	outboxpublisher "github.com/bionicotaku/lingo-utils/outbox/publisher"
 
-	"github.com/bionicotaku/lingo-services-catalog/internal/repositories"
+	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
 	"github.com/go-kratos/kratos/v2/log"
 	"go.opentelemetry.io/otel"
@@ -50,7 +50,7 @@ func ProvideRunner(
 		Publisher: publisher,
 		Config:    pubCfgNormalized,
 		Logger:    logger,
-		Meter:     meterProvider.Meter("lingo-services-catalog.outbox"),
+		Meter:     meterProvider.Meter("lingo-services-profile.outbox"),
 	})
 	if err != nil {
 		helper.Errorw("msg", "init outbox runner failed", "error", err)

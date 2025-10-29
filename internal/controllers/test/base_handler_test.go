@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bionicotaku/lingo-services-catalog/internal/controllers"
+	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 	"google.golang.org/grpc/metadata"
 )
 

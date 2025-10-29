@@ -1154,7 +1154,7 @@ const file_api_video_v1_lifecycle_proto_rawDesc = "" +
 	"\x16UpdateProcessingStatus\x12'.video.v1.UpdateProcessingStatusRequest\x1a(.video.v1.UpdateProcessingStatusResponse\x12V\n" +
 	"\x0fUpdateMediaInfo\x12 .video.v1.UpdateMediaInfoRequest\x1a!.video.v1.UpdateMediaInfoResponse\x12_\n" +
 	"\x12UpdateAIAttributes\x12#.video.v1.UpdateAIAttributesRequest\x1a$.video.v1.UpdateAIAttributesResponse\x12M\n" +
-	"\fArchiveVideo\x12\x1d.video.v1.ArchiveVideoRequest\x1a\x1e.video.v1.ArchiveVideoResponseBDZBgithub.com/bionicotaku/lingo-services-catalog/api/video/v1;videov1b\x06proto3"
+	"\fArchiveVideo\x12\x1d.video.v1.ArchiveVideoRequest\x1a\x1e.video.v1.ArchiveVideoResponseBDZBgithub.com/bionicotaku/lingo-services-profile/api/video/v1;videov1b\x06proto3"
 
 var (
 	file_api_video_v1_lifecycle_proto_rawDescOnce sync.Once

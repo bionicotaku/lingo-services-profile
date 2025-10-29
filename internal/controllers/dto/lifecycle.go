@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	"github.com/bionicotaku/lingo-services-catalog/internal/metadata"
-	"github.com/bionicotaku/lingo-services-catalog/internal/models/po"
-	"github.com/bionicotaku/lingo-services-catalog/internal/services"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	"github.com/bionicotaku/lingo-services-profile/internal/metadata"
+	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
+	"github.com/bionicotaku/lingo-services-profile/internal/services"
 
 	"github.com/google/uuid"
 )

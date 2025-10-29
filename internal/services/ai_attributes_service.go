@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	outboxevents "github.com/bionicotaku/lingo-services-catalog/internal/models/outbox_events"
-	"github.com/bionicotaku/lingo-services-catalog/internal/models/po"
-	"github.com/bionicotaku/lingo-services-catalog/internal/repositories"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	outboxevents "github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
+	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
+	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 
 	"github.com/go-kratos/kratos/v2/errors"
 	"github.com/google/uuid"

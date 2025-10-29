@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const meterName = "lingo-services-catalog.engagement"
+const meterName = "lingo-services-profile.engagement"
 
 type metrics struct {
 	applyCounter metric.Int64Counter

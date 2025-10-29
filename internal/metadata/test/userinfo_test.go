@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bionicotaku/lingo-services-catalog/internal/metadata"
+	"github.com/bionicotaku/lingo-services-profile/internal/metadata"
 )
 
 func TestExtractUserIDFromUserInfo_SupabasePayload(t *testing.T) {

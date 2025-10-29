@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package engagement.v1;
 
-option go_package = "github.com/bionicotaku/lingo-services-catalog/internal/tasks/engagement;engagement";
+option go_package = "github.com/bionicotaku/lingo-services-profile/internal/tasks/engagement;engagement";
 
 import "google/protobuf/timestamp.proto";
 

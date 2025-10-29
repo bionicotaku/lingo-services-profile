@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	configloader "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/configloader"
+	configloader "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
 	"github.com/go-kratos/kratos/v2/log"
 )
 

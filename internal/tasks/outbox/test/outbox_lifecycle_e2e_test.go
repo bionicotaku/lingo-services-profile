@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub/pstest"
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	"github.com/bionicotaku/lingo-services-catalog/internal/models/po"
-	"github.com/bionicotaku/lingo-services-catalog/internal/repositories"
-	"github.com/bionicotaku/lingo-services-catalog/internal/services"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
+	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
+	"github.com/bionicotaku/lingo-services-profile/internal/services"
 	outboxcfg "github.com/bionicotaku/lingo-utils/outbox/config"
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
@@ -179,7 +179,7 @@ func newLifecycleTestEnv(t *testing.T) *lifecycleTestEnv {
 	reader := sdkmetric.NewManualReader()
 	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { _ = meterProvider.Shutdown(ctx) })
-	meter := meterProvider.Meter("lingo-services-catalog.outbox.e2e")
+	meter := meterProvider.Meter("lingo-services-profile.outbox.e2e")
 
 	runner := newPublisherRunner(t, outboxRepo, publisher, meter, outboxcfg.PublisherConfig{
 		BatchSize:      1,

@@ -3,7 +3,7 @@ package configloader
 import (
 	"time"
 
-	configpb "github.com/bionicotaku/lingo-services-catalog/configs"
+	configpb "github.com/bionicotaku/lingo-services-profile/configs"
 
 	"google.golang.org/protobuf/types/known/durationpb"
 )

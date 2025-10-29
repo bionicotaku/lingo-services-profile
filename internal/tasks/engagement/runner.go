@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bionicotaku/lingo-services-catalog/internal/repositories"
+	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
 	"github.com/bionicotaku/lingo-utils/outbox/config"
 	"github.com/bionicotaku/lingo-utils/outbox/inbox"

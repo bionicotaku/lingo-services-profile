@@ -139,7 +139,7 @@ const file_internal_tasks_engagement_event_proto_rawDesc = "" +
 	"\voccurred_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"occurredAt\x12\x18\n" +
 	"\aversion\x18\a \x01(\tR\aversion\x12\x16\n" +
-	"\x06source\x18\b \x01(\tR\x06sourceBTZRgithub.com/bionicotaku/lingo-services-catalog/internal/tasks/engagement;engagementb\x06proto3"
+	"\x06source\x18\b \x01(\tR\x06sourceBTZRgithub.com/bionicotaku/lingo-services-profile/internal/tasks/engagement;engagementb\x06proto3"
 
 var (
 	file_internal_tasks_engagement_event_proto_rawDescOnce sync.Once

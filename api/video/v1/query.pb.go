@@ -978,7 +978,7 @@ const file_api_video_v1_query_proto_rawDesc = "" +
 	"\x10GetVideoMetadata\x12!.video.v1.GetVideoMetadataRequest\x1a\".video.v1.GetVideoMetadataResponse\x12S\n" +
 	"\x0eGetVideoDetail\x12\x1f.video.v1.GetVideoDetailRequest\x1a .video.v1.GetVideoDetailResponse\x12e\n" +
 	"\x14ListUserPublicVideos\x12%.video.v1.ListUserPublicVideosRequest\x1a&.video.v1.ListUserPublicVideosResponse\x12P\n" +
-	"\rListMyUploads\x12\x1e.video.v1.ListMyUploadsRequest\x1a\x1f.video.v1.ListMyUploadsResponseBDZBgithub.com/bionicotaku/lingo-services-catalog/api/video/v1;videov1b\x06proto3"
+	"\rListMyUploads\x12\x1e.video.v1.ListMyUploadsRequest\x1a\x1f.video.v1.ListMyUploadsResponseBDZBgithub.com/bionicotaku/lingo-services-profile/api/video/v1;videov1b\x06proto3"
 
 var (
 	file_api_video_v1_query_proto_rawDescOnce sync.Once

@@ -3,8 +3,8 @@ package dto
 import (
 	"fmt"
 
-	videov1 "github.com/bionicotaku/lingo-services-catalog/api/video/v1"
-	"github.com/bionicotaku/lingo-services-catalog/internal/models/vo"
+	videov1 "github.com/bionicotaku/lingo-services-profile/api/video/v1"
+	"github.com/bionicotaku/lingo-services-profile/internal/models/vo"
 
 	"github.com/google/uuid"
 )

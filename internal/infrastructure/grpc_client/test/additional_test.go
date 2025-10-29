@@ -5,8 +5,8 @@ import (
 	"io"
 	"testing"
 
-	configloader "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/configloader"
-	clientinfra "github.com/bionicotaku/lingo-services-catalog/internal/infrastructure/grpc_client"
+	configloader "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
+	clientinfra "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_client"
 
 	"github.com/bionicotaku/lingo-utils/observability"
 	"github.com/go-kratos/kratos/v2/log"

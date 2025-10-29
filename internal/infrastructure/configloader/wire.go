@@ -13,7 +13,7 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 
-	"github.com/bionicotaku/lingo-services-catalog/internal/controllers"
+	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 )
 
 // EngagementPubSubConfig 包装 engagement 订阅所需的 gcpubsub.Config，避免与主 Pub/Sub 冲突。

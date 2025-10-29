@@ -57,7 +57,7 @@ data:
     # 健康检查周期
     health_check_period: 60s
 
-    # 默认 schema（Supabase 推荐使用 catalog）
+    # 默认 schema（Supabase）
     schema: catalog
     # Supabase Pooler 模式要求禁用 prepared statements
     prepared_statements_enabled: false
