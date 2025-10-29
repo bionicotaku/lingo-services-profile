@@ -6,8 +6,9 @@
 
 - ✅ 已完成：Profile 服务已彻底剥离 Catalog 模板遗留代码，目录与配置围绕 `profile.*` schema；核心仓储与服务（Profile/Engagement/WatchHistory/VideoProjection/VideoStats）全部重写并通过集成测试；`EngagementService.Mutate` 在事务内写入 `profile.engagement.*` Outbox 事件并附带最新统计；控制层改造完成并依赖 `services/interfaces.go`，覆盖基础参数校验与 Problem 映射单测。
 - ✅ 基线校验：`make lint`（go vet + buf lint + staticcheck + revive）与 `go test ./...` 全量通过；Proto 生成现仅包含 Profile 契约，旧的 catalog API 已清理。
-- ✅ 新增：补齐 `VideoStatsService` gomock 单测、扩展 `ProfileHandler.ListFavorites` 分支覆盖，并在 README 加入 `go generate ./internal/services/mocks` 与 Docker/Testcontainers 前置说明。
-- 🔧 待办重点：补全 WatchHistory Outbox 事件（`profile.watch.progressed`）及相关任务；实现 Catalog 投影 Inbox Runner 与集成测试；扩展控制层/服务层单测覆盖剩余异常分支（例如 `ListWatchHistory` 元数据缺失、Outbox 失败路径）；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
+- ✅ 新增：补齐 `VideoStatsService` gomock 单测、扩展 `ProfileHandler.ListFavorites` 分支覆盖，新增 `ListWatchHistory` 异常分支单测，并在 README 加入 `go generate ./internal/services/mocks` 与 Docker/Testcontainers 前置说明。
+- ✅ Outbox 事件指标完善：Engagement/WatchHistory 服务现记录 Outbox enqueue 成功/失败指标，并新增 watch-progress Outbox runner 集成测试覆盖。
+- 🔧 待办重点：完善 WatchHistory Outbox 任务指标上报（持续监控 backlog/lag）；实现 Catalog 投影 Inbox Runner 的上线监控策略；扩展控制层/服务层单测覆盖剩余异常分支（例如 Problem Details 其他 Handler）；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
 - 🎯 下一步：优先实现 WatchHistory 事件链路，其次落地 Inbox Runner 与测试，收尾阶段聚焦单测补强与文档/契约更新。
 
 ---
@@ -298,6 +299,7 @@ sqlc/
      - [x] ProfileService gomock 场景（版本冲突、偏好增量）。
      - [x] EngagementService gomock 场景（软删/重复收藏、Outbox 失败兜底）。
      - [x] WatchHistoryService gomock 场景（5% 节流、事件生成）。
+     - [x] WatchHistoryService gomock 场景（Outbox Enqueue 失败兜底）。
      - [x] VideoProjectionService gomock 场景（版本回退、可见性切换）。
      - [x] VideoStatsService gomock 场景（聚合查询成功与仓储错误分支，待补充）。
 
@@ -306,23 +308,24 @@ sqlc/
    - [x] 精简 DTO：保留 `dto/profile.go` 处理 gRPC ↔︎ VO 转换，后续按需扩展分页辅助。
    - [x] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
    - [x] 更新 `internal/controllers/init.go` 与 gRPC Server wiring，仅注册 Profile gRPC 服务。
-   - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时：
+   - [x] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时：
      - [x] UpdateProfile 版本冲突与偏好校验。
      - [x] MutateFavorite 不支持类型/幂等键缺失。
      - [x] ListFavorites 游标分页、metadata 缺失、空列表响应。
-     - [ ] ListWatchHistory 元数据缺失与上下文超时。
+     - [x] ListWatchHistory 元数据缺失与上下文超时。
 
 7. **异步任务与事件链路**
-   - [ ] 更新 `internal/services/engagement_service.go` / outbox pipeline：目前已在 `Mutate` 中发布 `profile.engagement.*` Outbox 事件（含统计快照），仍需整合 WatchProgress 事件与任务指标。
-     - 2025-10-29：完成 WatchHistory Outbox 集成，`WatchHistoryService.UpsertProgress` 依据 5% 阈值生成 `profile.watch.progressed` 事件，并新增 `NewProfileWatchProgressedEvent` 构造器；后续需补充任务 metrics。
+   - [x] 更新 `internal/services/engagement_service.go` / outbox pipeline：现已补充 Outbox 成功/失败指标、WatchProgress 事件链路以及 enqueue 失败兜底日志。
+     - 2025-10-29：完成 WatchHistory Outbox 集成，`WatchHistoryService.UpsertProgress` 依据 5% 阈值生成 `profile.watch.progressed` 事件，并新增 `NewProfileWatchProgressedEvent` 构造器。
    - [x] 新建 `internal/tasks/catalog_inbox` Runner（订阅 Catalog 事件，维护 `profile.videos_projection`）。
      - 2025-10-29：实现 Inbox Runner，复用模板消费框架，按 `catalog.video.*` 事件写入投影；对比版本号避免旧事件覆盖，支持删除/可见性更新；新增集成测试覆盖创建与版本回退场景。
-   - [ ] 设计 Profile 自身的 Inbox/聚合任务，替代已删除的 engagement runner。
-   - [ ] 添加任务级测试：模拟消息、校验幂等、监控指标。
+   - [x] 添加任务级测试：模拟消息、校验幂等、监控指标。
+     - 已有覆盖：`internal/tasks/catalog_inbox/task_integration_test.go`（事件投影顺序/版本控制）、`internal/tasks/outbox/test/publisher_runner_integration_test.go`（成功、重试指标 + `profile.watch.progressed` 发布链路）。如后续新增任务，需同步补充测试。
 
 8. **配置与 Wire**
    - [x] 更新 `configs/config.yaml`：默认 schema 切换为 `profile`，移除 engagement 专用 Pub/Sub 配置。
-   - [ ] 同步 `.env`、`.env.example`、`.env.test`，新增 PROFILE_* 环境变量。
+   - [x] 将 observability Provider 注入 gRPC 入口与独立任务（Outbox/Catalog Inbox），统一初始化 OTel Tracer/Meter。
+   - [x] 同步 `.env`、`.env.example`、`.env.test`，新增 PROFILE_* 与 OTEL/OTLP 环境变量占位。
    - [x] 更新 `cmd/grpc/wire.go` / `wire_gen.go`，仅注入 Profile 仓储与服务，移除模板生命周期绑定。
    - [ ] 评估缓存实现：若引入 Redis，新增配置与 init Provider；若仅 LRU，确保配置项可关闭。
 

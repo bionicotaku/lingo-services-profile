@@ -106,7 +106,7 @@ observability:
   # OpenTelemetry 追踪配置
   tracing:
     # 是否启用追踪
-    enabled: false
+    enabled: true
     # 追踪导出方式
     exporter: stdout
     # 采样比例，1.0 表示全采样
@@ -116,7 +116,7 @@ observability:
   # OpenTelemetry 指标配置
   metrics:
     # 是否启用指标
-    enabled: false
+    enabled: true
     # 指标导出方式
     exporter: stdout
     # 指标导出间隔

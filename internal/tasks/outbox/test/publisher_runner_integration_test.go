@@ -14,9 +14,11 @@ import (
 	"cloud.google.com/go/pubsub/pstest"
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
+	"github.com/bionicotaku/lingo-services-profile/internal/services"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
 	outboxcfg "github.com/bionicotaku/lingo-utils/outbox/config"
 	outboxpublisher "github.com/bionicotaku/lingo-utils/outbox/publisher"
+	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/docker/go-connections/nat"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
@@ -107,7 +109,7 @@ func TestPublisherRunner_SuccessfulPublish(t *testing.T) {
 		var attempts int32
 		queryErr := pool.QueryRow(ctx, `
 			SELECT published_at, delivery_attempts
-			FROM catalog.outbox_events
+			FROM profile.outbox_events
 			WHERE event_id = $1`, eventID).Scan(&publishedAt, &attempts)
 		if queryErr != nil {
 			return false
@@ -188,15 +190,15 @@ func TestPublisherRunner_RetryOnFailure(t *testing.T) {
 	require.Eventually(t, func() bool {
 		var attempts int32
 		queryErr := pool.QueryRow(ctx, `
-			SELECT delivery_attempts
-			FROM catalog.outbox_events
-			WHERE event_id = $1`, eventID).Scan(&attempts)
+		SELECT delivery_attempts
+		FROM profile.outbox_events
+		WHERE event_id = $1`, eventID).Scan(&attempts)
 		return queryErr == nil && attempts >= 1
 	}, 3*time.Second, 50*time.Millisecond)
 
 	var publishedAt pgtype.Timestamptz
 	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT published_at FROM catalog.outbox_events WHERE event_id = $1`, eventID).Scan(&publishedAt))
+		SELECT published_at FROM profile.outbox_events WHERE event_id = $1`, eventID).Scan(&publishedAt))
 	require.False(t, publishedAt.Valid, "event should not be published without topic")
 
 	cancel()
@@ -230,9 +232,8 @@ func TestPublisherRunner_RecoveryAfterTopicCreated(t *testing.T) {
 	projectID := "test-project"
 	topicID := "catalog-video-events"
 
-	component, cleanupPub, publisher := newTestPublisher(ctx, t, server, projectID, topicID)
+	_, cleanupPub, publisher := newTestPublisher(ctx, t, server, projectID, topicID)
 	defer cleanupPub()
-	t.Cleanup(func() { _ = component })
 
 	reader := sdkmetric.NewManualReader()
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
@@ -269,9 +270,9 @@ func TestPublisherRunner_RecoveryAfterTopicCreated(t *testing.T) {
 	require.Eventually(t, func() bool {
 		var attempts int32
 		queryErr := pool.QueryRow(ctx, `
-			SELECT delivery_attempts
-			FROM catalog.outbox_events
-			WHERE event_id = $1`, eventID).Scan(&attempts)
+		SELECT delivery_attempts
+		FROM profile.outbox_events
+		WHERE event_id = $1`, eventID).Scan(&attempts)
 		return queryErr == nil && attempts >= 1
 	}, 3*time.Second, 50*time.Millisecond)
 
@@ -284,10 +285,111 @@ func TestPublisherRunner_RecoveryAfterTopicCreated(t *testing.T) {
 		var publishedAt pgtype.Timestamptz
 		queryErr := pool.QueryRow(ctx, `
 			SELECT published_at
-			FROM catalog.outbox_events
+			FROM profile.outbox_events
 			WHERE event_id = $1`, eventID).Scan(&publishedAt)
 		return queryErr == nil && publishedAt.Valid
 	}, 6*time.Second, 100*time.Millisecond)
+
+	cancel()
+	select {
+	case err := <-errCh:
+		require.True(t, err == nil || errors.Is(err, context.Canceled))
+	case <-time.After(time.Second):
+		t.Fatal("runner did not stop in time")
+	}
+}
+
+func TestPublisherRunner_PublishesWatchProgressEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	dsn, terminate := startPostgres(ctx, t)
+	defer terminate()
+
+	pool, err := pgxpool.New(ctx, dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+
+	applyMigrations(ctx, t, pool)
+
+	logger := log.NewStdLogger(io.Discard)
+	watchRepo := repositories.NewProfileWatchLogsRepository(pool, logger)
+	statsRepo := repositories.NewProfileVideoStatsRepository(pool, logger)
+	outboxRepo := repositories.NewOutboxRepository(pool, logger, defaultOutboxConfig)
+
+	txMgr, err := txmanager.NewManager(pool, txmanager.Config{}, txmanager.Dependencies{Logger: logger})
+	require.NoError(t, err)
+
+	svc := services.NewWatchHistoryService(watchRepo, statsRepo, outboxRepo, txMgr, logger)
+
+	userID := uuid.New()
+	videoID := uuid.New()
+	firstWatched := time.Now().UTC().Add(-5 * time.Minute)
+	lastWatched := time.Now().UTC()
+
+	_, err = svc.UpsertProgress(ctx, services.UpsertWatchProgressInput{
+		UserID:            userID,
+		VideoID:           videoID,
+		PositionSeconds:   150,
+		ProgressRatio:     0.75,
+		TotalWatchSeconds: 300,
+		FirstWatchedAt:    &firstWatched,
+		LastWatchedAt:     &lastWatched,
+		SessionID:         "test-session",
+	})
+	require.NoError(t, err)
+
+	var pending int64
+	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM profile.outbox_events WHERE event_type = 'profile.watch.progressed' AND published_at IS NULL`).Scan(&pending))
+	require.Equal(t, int64(1), pending)
+
+	server := pstest.NewServer()
+	t.Cleanup(func() { _ = server.Close() })
+
+	projectID := "test-project"
+	topicID := "profile-events"
+	topicName := fmt.Sprintf("projects/%s/topics/%s", projectID, topicID)
+	_, err = server.GServer.CreateTopic(ctx, &pubsubpb.Topic{Name: topicName})
+	require.NoError(t, err)
+
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	meter := provider.Meter("lingo-services-profile.outbox.test")
+
+	component, cleanupPub, publisher := newTestPublisher(ctx, t, server, projectID, topicID)
+	defer cleanupPub()
+	t.Cleanup(func() { _ = component })
+
+	runner := newPublisherRunner(t, outboxRepo, publisher, meter, outboxcfg.PublisherConfig{
+		BatchSize:      1,
+		TickInterval:   20 * time.Millisecond,
+		InitialBackoff: 10 * time.Millisecond,
+		MaxBackoff:     200 * time.Millisecond,
+		MaxAttempts:    5,
+		PublishTimeout: 250 * time.Millisecond,
+		Workers:        1,
+		LockTTL:        time.Second,
+	})
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- runner.Run(runCtx) }()
+
+	require.Eventually(t, func() bool {
+		var publishedAt pgtype.Timestamptz
+		queryErr := pool.QueryRow(ctx, `
+			SELECT published_at
+			FROM profile.outbox_events
+			WHERE event_type = 'profile.watch.progressed'`).Scan(&publishedAt)
+		return queryErr == nil && publishedAt.Valid
+	}, 6*time.Second, 50*time.Millisecond)
+
+	msgs := server.Messages()
+	require.Len(t, msgs, 1)
+	require.Equal(t, topicName, msgs[0].Topic)
 
 	cancel()
 	select {
@@ -357,10 +459,10 @@ func startPostgres(ctx context.Context, t *testing.T) (string, func()) {
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": "postgres",
 			"POSTGRES_USER":     "postgres",
-			"POSTGRES_DB":       "catalog",
+			"POSTGRES_DB":       "profile",
 		},
 		WaitingFor: wait.ForSQL("5432/tcp", "postgres", func(host string, port nat.Port) string {
-			return fmt.Sprintf("postgres://postgres:postgres@%s:%s/catalog?sslmode=disable", host, port.Port())
+			return fmt.Sprintf("postgres://postgres:postgres@%s:%s/profile?sslmode=disable", host, port.Port())
 		}).WithStartupTimeout(60 * time.Second),
 	}
 
@@ -378,7 +480,7 @@ func startPostgres(ctx context.Context, t *testing.T) (string, func()) {
 	port, err := container.MappedPort(ctx, "5432")
 	require.NoError(t, err)
 
-	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/catalog?sslmode=disable", host, port.Port())
+	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/profile?sslmode=disable", host, port.Port())
 	cleanup := func() {
 		termCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

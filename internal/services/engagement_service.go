@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
+	outboxevents "github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-utils/txmanager"
@@ -49,6 +49,7 @@ type EngagementService struct {
 	outbox      OutboxEnqueuer
 	txManager   txmanager.Manager
 	log         *log.Helper
+	metrics     *outboxMetrics
 }
 
 // NewEngagementService 构造 EngagementService。
@@ -65,6 +66,7 @@ func NewEngagementService(
 		outbox:      outbox,
 		txManager:   tx,
 		log:         log.NewHelper(logger),
+		metrics:     newOutboxMetrics("engagement"),
 	}
 }
 
@@ -182,9 +184,21 @@ func (s *EngagementService) enqueueEvent(ctx context.Context, sess txmanager.Ses
 	}
 	msg, err := buildOutboxMessage(evt)
 	if err != nil {
+		if s.metrics != nil {
+			s.metrics.recordFailure(ctx, evt.Kind.String(), err)
+		}
 		return err
 	}
-	return s.outbox.Enqueue(ctx, sess, msg)
+	if err := s.outbox.Enqueue(ctx, sess, msg); err != nil {
+		if s.metrics != nil {
+			s.metrics.recordFailure(ctx, evt.Kind.String(), err)
+		}
+		return err
+	}
+	if s.metrics != nil {
+		s.metrics.recordSuccess(ctx, evt.Kind.String(), evt.OccurredAt)
+	}
+	return nil
 }
 
 func buildOutboxMessage(evt *outboxevents.DomainEvent) (repositories.OutboxMessage, error) {

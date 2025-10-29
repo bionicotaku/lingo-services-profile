@@ -9,11 +9,13 @@ package main
 import (
 	"context"
 	"fmt"
+
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/tasks/catalog_inbox"
 	"github.com/bionicotaku/lingo-utils/gclog"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
+	"github.com/bionicotaku/lingo-utils/observability"
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
@@ -27,26 +29,35 @@ func wireCatalogInboxTask(contextContext context.Context, params configloader.Pa
 	if err != nil {
 		return nil, nil, err
 	}
+	observabilityConfig := configloader.ProvideObservabilityConfig(runtimeConfig)
 	serviceInfo := configloader.ProvideServiceInfo(runtimeConfig)
+	observabilityServiceInfo := configloader.ProvideObservabilityInfo(serviceInfo)
 	config := configloader.ProvideLoggerConfig(serviceInfo)
 	component, cleanup, err := gclog.NewComponent(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	logger := gclog.ProvideLogger(component)
+	observabilityComponent, cleanup2, err := observability.NewComponent(contextContext, observabilityConfig, observabilityServiceInfo, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	messagingConfig := configloader.ProvideMessagingConfig(runtimeConfig)
 	gcpubsubConfig := configloader.ProvidePubSubConfig(messagingConfig)
 	dependencies := configloader.ProvidePubSubDependencies(logger)
-	gcpubsubComponent, cleanup2, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
+	gcpubsubComponent, cleanup3, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
 	if err != nil {
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
 	subscriber := gcpubsub.ProvideSubscriber(gcpubsubComponent)
 	databaseConfig := configloader.ProvideDatabaseConfig(runtimeConfig)
 	pgxpoolxConfig := configloader.ProvidePgxConfig(databaseConfig)
-	pgxpoolxComponent, cleanup3, err := pgxpoolx.ProvideComponent(contextContext, pgxpoolxConfig, logger)
+	pgxpoolxComponent, cleanup4, err := pgxpoolx.ProvideComponent(contextContext, pgxpoolxConfig, logger)
 	if err != nil {
+		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
@@ -56,16 +67,7 @@ func wireCatalogInboxTask(contextContext context.Context, params configloader.Pa
 	inboxRepository := repositories.NewInboxRepository(pool, logger, configConfig)
 	profileVideoProjectionRepository := repositories.NewProfileVideoProjectionRepository(pool, logger)
 	txmanagerConfig := configloader.ProvideTxConfig(runtimeConfig)
-	txmanagerComponent, cleanup4, err := txmanager.NewComponent(txmanagerConfig, pool, logger)
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	manager := txmanager.ProvideManager(txmanagerComponent)
-	task := cataloginbox.ProvideTask(subscriber, inboxRepository, profileVideoProjectionRepository, manager, configConfig, logger)
-	mainCatalogInboxApp, err := newCatalogInboxApp(logger, task)
+	txmanagerComponent, cleanup5, err := txmanager.NewComponent(txmanagerConfig, pool, logger)
 	if err != nil {
 		cleanup4()
 		cleanup3()
@@ -73,7 +75,19 @@ func wireCatalogInboxTask(contextContext context.Context, params configloader.Pa
 		cleanup()
 		return nil, nil, err
 	}
+	manager := txmanager.ProvideManager(txmanagerComponent)
+	task := cataloginbox.ProvideTask(subscriber, inboxRepository, profileVideoProjectionRepository, manager, configConfig, logger)
+	mainCatalogInboxApp, err := newCatalogInboxApp(observabilityComponent, logger, task)
+	if err != nil {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	return mainCatalogInboxApp, func() {
+		cleanup5()
 		cleanup4()
 		cleanup3()
 		cleanup2()
@@ -85,7 +99,7 @@ func wireCatalogInboxTask(contextContext context.Context, params configloader.Pa
 
 var catalogInboxRepoSet = wire.NewSet(repositories.NewInboxRepository, repositories.NewProfileVideoProjectionRepository)
 
-func newCatalogInboxApp(logger log.Logger, task *cataloginbox.Task) (*catalogInboxApp, error) {
+func newCatalogInboxApp(_ *observability.Component, logger log.Logger, task *cataloginbox.Task) (*catalogInboxApp, error) {
 	if task == nil {
 		return &catalogInboxApp{Logger: logger}, nil
 	}

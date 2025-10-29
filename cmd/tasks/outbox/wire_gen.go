@@ -15,6 +15,7 @@ import (
 	"github.com/bionicotaku/lingo-services-profile/internal/tasks/outbox"
 	"github.com/bionicotaku/lingo-utils/gclog"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
+	"github.com/bionicotaku/lingo-utils/observability"
 	"github.com/bionicotaku/lingo-utils/outbox/publisher"
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/go-kratos/kratos/v2/log"
@@ -28,17 +29,25 @@ func wireOutboxTask(contextContext context.Context, params configloader.Params) 
 	if err != nil {
 		return nil, nil, err
 	}
+	observabilityConfig := configloader.ProvideObservabilityConfig(runtimeConfig)
 	serviceInfo := configloader.ProvideServiceInfo(runtimeConfig)
+	observabilityServiceInfo := configloader.ProvideObservabilityInfo(serviceInfo)
 	config := configloader.ProvideLoggerConfig(serviceInfo)
 	component, cleanup, err := gclog.NewComponent(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	logger := gclog.ProvideLogger(component)
+	observabilityComponent, cleanup2, err := observability.NewComponent(contextContext, observabilityConfig, observabilityServiceInfo, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	databaseConfig := configloader.ProvideDatabaseConfig(runtimeConfig)
 	pgxpoolxConfig := configloader.ProvidePgxConfig(databaseConfig)
-	pgxpoolxComponent, cleanup2, err := pgxpoolx.ProvideComponent(contextContext, pgxpoolxConfig, logger)
+	pgxpoolxComponent, cleanup3, err := pgxpoolx.ProvideComponent(contextContext, pgxpoolxConfig, logger)
 	if err != nil {
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
@@ -48,22 +57,25 @@ func wireOutboxTask(contextContext context.Context, params configloader.Params) 
 	outboxRepository := repositories.NewOutboxRepository(pool, logger, configConfig)
 	gcpubsubConfig := configloader.ProvidePubSubConfig(messagingConfig)
 	dependencies := configloader.ProvidePubSubDependencies(logger)
-	gcpubsubComponent, cleanup3, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
-	if err != nil {
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	publisher := gcpubsub.ProvidePublisher(gcpubsubComponent)
-	runner := outbox.ProvideRunner(outboxRepository, publisher, gcpubsubConfig, configConfig, logger)
-	mainOutboxTaskApp, err := newOutboxTaskApp(logger, runner)
+	gcpubsubComponent, cleanup4, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
+	publisher := gcpubsub.ProvidePublisher(gcpubsubComponent)
+	runner := outbox.ProvideRunner(outboxRepository, publisher, gcpubsubConfig, configConfig, logger)
+	mainOutboxTaskApp, err := newOutboxTaskApp(observabilityComponent, logger, runner)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	return mainOutboxTaskApp, func() {
+		cleanup4()
 		cleanup3()
 		cleanup2()
 		cleanup()
@@ -74,7 +86,7 @@ func wireOutboxTask(contextContext context.Context, params configloader.Params) 
 
 var outboxRepositorySet = wire.NewSet(repositories.NewOutboxRepository)
 
-func newOutboxTaskApp(logger log.Logger, runner *publisher.Runner) (*outboxTaskApp, error) {
+func newOutboxTaskApp(_ *observability.Component, logger log.Logger, runner *publisher.Runner) (*outboxTaskApp, error) {
 	if runner == nil {
 		return &outboxTaskApp{Logger: logger}, nil
 	}

@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"testing"
 	"time"
 
@@ -440,4 +441,105 @@ func TestProfileHandler_ListFavorites_PaginationAndStats(t *testing.T) {
 	require.False(t, second.GetState().GetHasLiked())
 	require.True(t, second.GetState().GetHasBookmarked())
 	require.Equal(t, "Lesson 2", second.GetVideo().GetTitle())
+}
+
+func TestProfileHandler_ListWatchHistory_MetadataMissing(t *testing.T) {
+	t.Parallel()
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	_, err := handler.ListWatchHistory(context.Background(), &profilev1.ListWatchHistoryRequest{})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestProfileHandler_ListWatchHistory_InvalidPageToken(t *testing.T) {
+	t.Parallel()
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, uuid.New())
+	_, err := handler.ListWatchHistory(ctx, &profilev1.ListWatchHistoryRequest{PageToken: "oops"})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestProfileHandler_ListWatchHistory_ServiceError(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	listErr := errors.New("query failed")
+	watchHistory := &watchHistoryServiceStub{
+		listFn: func(context.Context, services.ListWatchHistoryInput) ([]*po.ProfileWatchLog, error) {
+			return nil, listErr
+		},
+	}
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		watchHistory,
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, userID)
+	_, err := handler.ListWatchHistory(ctx, &profilev1.ListWatchHistoryRequest{})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.Internal, st.Code())
+	require.Contains(t, st.Message(), listErr.Error())
+}
+
+func TestProfileHandler_ListWatchHistory_TimeoutPropagation(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	watchHistory := &watchHistoryServiceStub{
+		listFn: func(ctx context.Context, input services.ListWatchHistoryInput) ([]*po.ProfileWatchLog, error) {
+			require.Equal(t, userID, input.UserID)
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok, "expected context deadline")
+			require.WithinDuration(t, time.Now().Add(25*time.Millisecond), deadline, 50*time.Millisecond)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		watchHistory,
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{Query: 25 * time.Millisecond}),
+	)
+
+	ctx := metadataContextWithUser(t, userID)
+	_, err := handler.ListWatchHistory(ctx, &profilev1.ListWatchHistoryRequest{})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.Internal, st.Code())
+	require.Contains(t, st.Message(), context.DeadlineExceeded.Error())
 }

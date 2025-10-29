@@ -38,6 +38,12 @@ go run ./cmd/tasks/outbox -conf configs/config.yaml
 go run ./cmd/tasks/catalog_inbox -conf configs/config.yaml
 ```
 
+## 可观测性
+- 统一使用 `lingo-utils/observability` 初始化 OpenTelemetry Tracer/Meter Provider，配置位于 `configs/config.yaml` 的 `observability` 段。
+- 默认启用追踪与指标导出，使用 `stdout` 便于本地调试；若接入云端/自建 Collector，可将 `exporter` 调整为 `otlp_grpc` 并设置 `endpoint`/`headers`。
+- gRPC 服务与独立任务进程（Outbox/Catalog Inbox）均复用同一套配置，确保 Outbox、Inbox、gRPC 指标落入统一 Meter Provider。
+- 新增的领域事件指标（收藏/观看 Outbox enqueue、Watch Progress 发布链路）会自动写入 OTel 指标，可通过调整 `observability.metrics.interval` 控制推送频率。
+
 ## 测试说明
 - Service 层集成测试位于 `internal/services/test`，依赖 Testcontainers 启动 Postgres。
 - Controller 层 gRPC 单测位于 `internal/controllers/test`，覆盖元数据解析与错误映射。

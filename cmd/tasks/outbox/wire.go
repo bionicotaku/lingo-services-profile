@@ -14,6 +14,7 @@ import (
 
 	"github.com/bionicotaku/lingo-utils/gclog"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
+	obswire "github.com/bionicotaku/lingo-utils/observability"
 	outboxpublisher "github.com/bionicotaku/lingo-utils/outbox/publisher"
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/go-kratos/kratos/v2/log"
@@ -28,6 +29,7 @@ func wireOutboxTask(context.Context, configloader.Params) (*outboxTaskApp, func(
 	panic(wire.Build(
 		configloader.ProviderSet,
 		gclog.ProviderSet,
+		obswire.ProviderSet,
 		pgxpoolx.ProviderSet,
 		gcpubsub.ProviderSet,
 		outboxRepositorySet,
@@ -36,7 +38,7 @@ func wireOutboxTask(context.Context, configloader.Params) (*outboxTaskApp, func(
 	))
 }
 
-func newOutboxTaskApp(logger log.Logger, runner *outboxpublisher.Runner) (*outboxTaskApp, error) {
+func newOutboxTaskApp(_ *obswire.Component, logger log.Logger, runner *outboxpublisher.Runner) (*outboxTaskApp, error) {
 	if runner == nil {
 		return &outboxTaskApp{Logger: logger}, nil
 	}

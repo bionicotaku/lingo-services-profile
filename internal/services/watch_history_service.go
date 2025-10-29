@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
+	outboxevents "github.com/bionicotaku/lingo-services-profile/internal/models/outbox_events"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-utils/txmanager"
@@ -39,6 +39,7 @@ type WatchHistoryService struct {
 	outbox    OutboxEnqueuer
 	txManager txmanager.Manager
 	log       *log.Helper
+	metrics   *outboxMetrics
 }
 
 // NewWatchHistoryService 构造 WatchHistoryService。
@@ -55,6 +56,7 @@ func NewWatchHistoryService(
 		outbox:    outbox,
 		txManager: tx,
 		log:       log.NewHelper(logger),
+		metrics:   newOutboxMetrics("watch_history"),
 	}
 }
 
@@ -125,14 +127,26 @@ func (s *WatchHistoryService) UpsertProgress(ctx context.Context, input UpsertWa
 			occurredAt := updated.LastWatchedAt
 			evt, err := outboxevents.NewProfileWatchProgressedEvent(input.UserID, input.VideoID, updated, occurredAt, input.SessionID, nil)
 			if err != nil {
+				if s.metrics != nil {
+					s.metrics.recordFailure(txCtx, outboxevents.KindProfileWatchProgressed.String(), err)
+				}
 				return err
 			}
 			msg, err := buildOutboxMessage(evt)
 			if err != nil {
+				if s.metrics != nil {
+					s.metrics.recordFailure(txCtx, evt.Kind.String(), err)
+				}
 				return err
 			}
 			if err := s.outbox.Enqueue(txCtx, sess, msg); err != nil {
+				if s.metrics != nil {
+					s.metrics.recordFailure(txCtx, evt.Kind.String(), err)
+				}
 				return err
+			}
+			if s.metrics != nil {
+				s.metrics.recordSuccess(txCtx, evt.Kind.String(), evt.OccurredAt)
 			}
 		}
 		return nil

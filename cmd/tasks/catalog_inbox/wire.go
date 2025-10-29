@@ -14,6 +14,7 @@ import (
 
 	"github.com/bionicotaku/lingo-utils/gclog"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
+	obswire "github.com/bionicotaku/lingo-utils/observability"
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
@@ -31,6 +32,7 @@ func wireCatalogInboxTask(context.Context, configloader.Params) (*catalogInboxAp
 	panic(wire.Build(
 		configloader.ProviderSet,
 		gclog.ProviderSet,
+		obswire.ProviderSet,
 		pgxpoolx.ProviderSet,
 		txmanager.ProviderSet,
 		gcpubsub.ProviderSet,
@@ -40,7 +42,7 @@ func wireCatalogInboxTask(context.Context, configloader.Params) (*catalogInboxAp
 	))
 }
 
-func newCatalogInboxApp(logger log.Logger, task *cataloginbox.Task) (*catalogInboxApp, error) {
+func newCatalogInboxApp(_ *obswire.Component, logger log.Logger, task *cataloginbox.Task) (*catalogInboxApp, error) {
 	if task == nil {
 		return &catalogInboxApp{Logger: logger}, nil
 	}
