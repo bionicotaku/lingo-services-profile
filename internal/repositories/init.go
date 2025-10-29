@@ -9,4 +9,9 @@ var ProviderSet = wire.NewSet(
 	NewOutboxRepository, // ← Outbox 仓储
 	NewInboxRepository,  // ← Inbox 仓储
 	NewVideoUserStatesRepository,
+	NewProfileUsersRepository,
+	NewProfileEngagementsRepository,
+	NewProfileWatchLogsRepository,
+	NewProfileVideoProjectionRepository,
+	NewProfileVideoStatsRepository,
 )

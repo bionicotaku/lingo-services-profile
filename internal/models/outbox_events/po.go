@@ -29,6 +29,12 @@ const (
 	KindVideoProcessingFailed
 	// KindVideoVisibilityChanged 表示可见性变更事件。
 	KindVideoVisibilityChanged
+	// KindProfileEngagementAdded 表示用户互动新增事件。
+	KindProfileEngagementAdded
+	// KindProfileEngagementRemoved 表示用户互动删除事件。
+	KindProfileEngagementRemoved
+	// KindProfileWatchProgressed 表示观看进度更新事件。
+	KindProfileWatchProgressed
 )
 
 func (k Kind) String() string {
@@ -47,8 +53,14 @@ func (k Kind) String() string {
 		return "catalog.video.processing_failed"
 	case KindVideoVisibilityChanged:
 		return "catalog.video.visibility_changed"
+	case KindProfileEngagementAdded:
+		return "profile.engagement.added"
+	case KindProfileEngagementRemoved:
+		return "profile.engagement.removed"
+	case KindProfileWatchProgressed:
+		return "profile.watch.progressed"
 	default:
-		return "catalog.video.unknown"
+		return "profile.event.unknown"
 	}
 }
 
@@ -154,9 +166,45 @@ type VideoVisibilityChanged struct {
 	Reason           *string
 }
 
+// ProfileEngagementAdded 描述互动新增事件载荷。
+type ProfileEngagementAdded struct {
+	UserID         uuid.UUID
+	VideoID        uuid.UUID
+	EngagementType string
+	OccurredAt     time.Time
+	Source         *string
+	Stats          *po.ProfileVideoStats
+}
+
+// ProfileEngagementRemoved 描述互动删除事件载荷。
+type ProfileEngagementRemoved struct {
+	UserID         uuid.UUID
+	VideoID        uuid.UUID
+	EngagementType string
+	OccurredAt     time.Time
+	DeletedAt      *time.Time
+	Source         *string
+	Stats          *po.ProfileVideoStats
+}
+
+// ProfileWatchProgressed 描述观看进度更新事件载荷。
+type ProfileWatchProgressed struct {
+	UserID    uuid.UUID
+	VideoID   uuid.UUID
+	Progress  *po.ProfileWatchLog
+	SessionID string
+	Context   map[string]any
+}
+
 const (
 	// AggregateTypeVideo 标识视频聚合类型，供 Outbox headers / attributes 使用。
 	AggregateTypeVideo = "video"
+	// AggregateTypeProfileUser 标识档案聚合类型。
+	AggregateTypeProfileUser = "profile.user"
+	// AggregateTypeProfileEngagement 标识互动聚合类型。
+	AggregateTypeProfileEngagement = "profile.engagement"
+	// AggregateTypeProfileWatchLog 标识观看记录聚合类型。
+	AggregateTypeProfileWatchLog = "profile.watch_log"
 	// SchemaVersionV1 描述事件载荷的当前 schema 版本。
 	SchemaVersionV1 = "v1"
 )

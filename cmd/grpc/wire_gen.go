@@ -8,10 +8,9 @@ package main
 
 import (
 	"context"
-
 	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
-	grpcserver "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
+	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/services"
 	"github.com/bionicotaku/lingo-services-profile/internal/tasks/engagement"
@@ -23,7 +22,9 @@ import (
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2"
+)
 
+import (
 	_ "go.uber.org/automaxprocs"
 )
 
@@ -88,7 +89,6 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	messagingConfig := configloader.ProvideMessagingConfig(runtimeConfig)
 	configConfig := configloader.ProvideOutboxConfig(messagingConfig)
 	outboxRepository := repositories.NewOutboxRepository(pool, logger, configConfig)
-	inboxRepository := repositories.NewInboxRepository(pool, logger, configConfig)
 	txmanagerConfig := configloader.ProvideTxConfig(runtimeConfig)
 	txmanagerComponent, cleanup5, err := txmanager.NewComponent(txmanagerConfig, pool, logger)
 	if err != nil {
@@ -113,7 +113,18 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	videoUserStatesRepository := repositories.NewVideoUserStatesRepository(pool, logger)
 	videoQueryService := services.NewVideoQueryService(videoRepository, videoUserStatesRepository, manager, logger)
 	videoQueryHandler := controllers.NewVideoQueryHandler(videoQueryService, baseHandler)
-	server := grpcserver.NewGRPCServer(serverConfig, metricsConfig, serverMiddleware, lifecycleHandler, videoQueryHandler, logger)
+	profileUsersRepository := repositories.NewProfileUsersRepository(pool, logger)
+	profileService := services.NewProfileService(profileUsersRepository, manager, logger)
+	profileEngagementsRepository := repositories.NewProfileEngagementsRepository(pool, logger)
+	profileVideoStatsRepository := repositories.NewProfileVideoStatsRepository(pool, logger)
+	engagementService := services.NewEngagementService(profileEngagementsRepository, profileVideoStatsRepository, manager, logger)
+	profileWatchLogsRepository := repositories.NewProfileWatchLogsRepository(pool, logger)
+	watchHistoryService := services.NewWatchHistoryService(profileWatchLogsRepository, profileVideoStatsRepository, manager, logger)
+	profileVideoProjectionRepository := repositories.NewProfileVideoProjectionRepository(pool, logger)
+	videoProjectionService := services.NewVideoProjectionService(profileVideoProjectionRepository, logger)
+	videoStatsService := services.NewVideoStatsService(profileVideoStatsRepository, logger)
+	profileHandler := controllers.NewProfileHandler(profileService, engagementService, watchHistoryService, videoProjectionService, videoStatsService, baseHandler)
+	server := grpcserver.NewGRPCServer(serverConfig, metricsConfig, serverMiddleware, lifecycleHandler, videoQueryHandler, profileHandler, logger)
 	gcpubsubConfig := configloader.ProvidePubSubConfig(messagingConfig)
 	dependencies := configloader.ProvidePubSubDependencies(logger)
 	gcpubsubComponent, cleanup6, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
@@ -127,6 +138,7 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	}
 	publisher := gcpubsub.ProvidePublisher(gcpubsubComponent)
 	runner := outbox.ProvideRunner(outboxRepository, publisher, gcpubsubConfig, configConfig, logger)
+	inboxRepository := repositories.NewInboxRepository(pool, logger, configConfig)
 	engagementPubSubConfig := configloader.ProvideEngagementConfig(messagingConfig)
 	engagementSubscriber, cleanup7, err := configloader.ProvideEngagementSubscriber(contextContext, engagementPubSubConfig, dependencies)
 	if err != nil {

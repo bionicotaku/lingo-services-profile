@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package profile.v1;
+
+option go_package = "github.com/bionicotaku/lingo-services-profile/api/profile/v1;profilev1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "api/profile/v1/profile.proto";
+
+// EngagementAddedEvent 对应 profile.engagement.added。
+message EngagementAddedEvent {
+  string event_id = 1;
+  string user_id = 2;
+  string video_id = 3;
+  FavoriteType favorite_type = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+  string source = 6;
+  VideoStats stats = 7;
+}
+
+// EngagementRemovedEvent 对应 profile.engagement.removed。
+message EngagementRemovedEvent {
+  string event_id = 1;
+  string user_id = 2;
+  string video_id = 3;
+  FavoriteType favorite_type = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+  google.protobuf.Timestamp deleted_at = 6;
+  string source = 7;
+  VideoStats stats = 8;
+}
+
+// WatchProgressedEvent 对应 profile.watch.progressed。
+message WatchProgressedEvent {
+  string event_id = 1;
+  string user_id = 2;
+  string video_id = 3;
+  WatchProgress progress = 4;
+  google.protobuf.Struct context = 5;
+}

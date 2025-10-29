@@ -2,6 +2,13 @@
 
 > 目标：按《services-profile/ARCHITECTURE.md》定义的 Profile 领域职责，完成从「Catalog 视频模板」到「用户档案/互动/观看历史」的全面重构。采用“先增量引入新业务，再安全移除旧视频代码”的策略，确保目录骨架与模板一致，同时逐步替换业务实现。
 
+## 0. 最新进展（2025-10-29）
+
+- ✅ 已完成：初版 `ProfileHandler`、DTO 与 BaseHandler 元数据改造；repositories/services 层核心实现及集成测试落地。
+- 🔧 进行中：Wire 绑定仍依赖旧接口，需导出 `OriginalMediaRepository` 等接口并更新 `cmd/grpc/wire.go`；gRPC server 需按 feature flag 支持新旧 Handler；Profile/Engagement/Watch handler 单测缺失。
+- ✅ 本轮执行：`OriginalMediaRepository` 接口导出并更新 Wire 绑定，重新生成 `wire_gen.go`，修复 gRPC Server 测试用例参数；`go test ./...` 通过（2025-10-29）。
+- 🎯 下一步（本轮执行重点）：导出并绑定新接口 → 调整 Wire Provider / grpc server 注册 → 拆分 engagement/watch handler 或在 Profile handler 内补齐逻辑 → 编写 Handler gomock 测试 → 运行 `make lint` + `go test ./...`。
+
 ---
 
 ## 1. 范围与验收标准
@@ -254,49 +261,49 @@ sqlc/
 
 ## 11. 任务拆解（执行列表 · 细项）
 
-1. **契约与文档**
-   - [ ] 创建 `api/profile/v1/profile.proto`（定义 RPC、消息、枚举、错误码）。
-   - [ ] 新建 `api/profile/v1/events.proto`（Outbox 事件 payload）。
-   - [ ] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；临时将 `api/video/v1` 移至 `api/_legacy/video/v1`。
-   - [ ] 运行 `buf generate && gofumpt && goimports`，确保 `buf lint && buf breaking` 通过。
-   - [ ] 更新 REST/OpenAPI 文档（若存在）：新增 Profile 端点、Problem 详情、示例请求。
-   - [ ] 更新 `docs/api` 或 README 中的 API 索引链接。
+1. **契约与文档**（进行中）
+   - [x] 创建 `api/profile/v1/profile.proto`（定义 RPC、消息、枚举、错误码）。
+   - [x] 新建 `api/profile/v1/events.proto`（Outbox 事件 payload）。
+   - [ ] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；临时将 `api/video/v1` 移至 `api/_legacy/video/v1`。（待 legacy 拆除阶段执行）
+   - [x] 运行 `buf generate && gofumpt && goimports`，确保 `buf lint && buf breaking` 通过。
+   - [ ] 更新 REST/OpenAPI 文档（若存在）：新增 Profile 端点、Problem 详情、示例请求。（尚未执行，待新接口定义稳定后补齐）
+   - [ ] 更新 `docs/api` 或 README 中的 API 索引链接。（尚未执行）
 
-2. **数据库迁移与 SQLC**
-   - [ ] 编写 `migrations/101_create_profile_schema.sql`，包含全部表、索引、触发器、RLS TODO。
-   - [ ] 将脚本拷贝到 `sqlc/schema/101_profile_schema.sql`，供 SQLC 使用。
-   - [ ] 更新 `sqlc.yaml`：新增 profile 输出包（如 `internal/repositories/profiledb`），保留 catalog legacy 配置。
-   - [ ] 运行 `sqlc generate`，验证新生成代码编译通过。
+2. **数据库迁移与 SQLC**（进行中）
+   - [x] 编写 `migrations/101_create_profile_schema.sql`，包含全部表、索引、触发器、RLS TODO。
+  - [x] 将脚本拷贝到 `sqlc/schema/101_profile_schema.sql`，供 SQLC 使用。
+   - [x] 更新 `sqlc.yaml`：新增 profile 输出包（如 `internal/repositories/profiledb`），保留 catalog legacy 配置。
+  - [x] 运行 `sqlc generate`，验证新生成代码编译通过。
    - [ ] 编写数据迁移脚本（可选）：`tools/scripts/migrate_catalog_to_profile.sh`，用于迁移历史交互数据。
 
-3. **模型层调整**
-   - [ ] 在 `internal/models/po` 新增 `profile_user.go`、`profile_engagement.go`、`profile_watch_log.go`、`profile_video_projection.go`、`profile_video_stats.go`。
-   - [ ] 在 `internal/models/vo` 新增相应视图对象与转换方法。
-   - [ ] 更新 `internal/models/outbox_events`，添加 profile 事件常量、Payload struct、序列化逻辑。
+3. **模型层调整**（进行中）
+   - [x] 在 `internal/models/po` 新增 `profile_user.go`、`profile_engagement.go`、`profile_watch_log.go`、`profile_video_projection.go`、`profile_video_stats.go`。
+   - [x] 在 `internal/models/vo` 新增相应视图对象与转换方法。
+   - [x] 更新 `internal/models/outbox_events`，添加 profile 事件常量、Payload struct、序列化逻辑（已新增 Kind/载荷定义与 proto 编码函数）。
 
-4. **仓储实现与测试**
-   - [ ] 新建 `internal/repositories/profile_users_repo.go`，实现档案读写与乐观锁。
-   - [ ] 新建 `internal/repositories/profile_engagements_repo.go`，实现复合主键 UPSERT/软删、分页。
-   - [ ] 新建 `internal/repositories/profile_watch_logs_repo.go`，实现进度写入、TTL、分页。
-   - [ ] 新建 `internal/repositories/profile_video_projection_repo.go`，实现 Catalog 投影维护。
-   - [ ] 新建 `internal/repositories/profile_video_stats_repo.go`，实现计数累加与读取。
-   - [ ] 更新 `internal/repositories/init.go` 注入新仓储，旧视频仓储标注 `// TODO(legacy)`。
-   - [ ] 编写集成测试（testcontainers）：针对上述仓储验证幂等、事务、索引行为。
+4. **仓储实现与测试**（完成）
+   - [x] 新建 `internal/repositories/profile_users_repo.go`，实现档案读写与乐观锁。
+   - [x] 新建 `internal/repositories/profile_engagements_repo.go`，实现复合主键 UPSERT/软删、分页。
+   - [x] 新建 `internal/repositories/profile_watch_logs_repo.go`，实现进度写入、TTL、分页。
+   - [x] 新建 `internal/repositories/profile_video_projection_repo.go`，实现 Catalog 投影维护。
+   - [x] 新建 `internal/repositories/profile_video_stats_repo.go`，实现计数累加与读取。
+  - [x] 更新 `internal/repositories/init.go` 注入新仓储，旧视频仓储标注 `// TODO(legacy)`。
+  - [x] 编写集成测试（testcontainers）：针对上述仓储验证幂等、事务、索引行为。（已覆盖 users/engagements/watch_logs/videos_projection/video_stats）
 
-5. **服务层重建**
-   - [ ] 新建 `ProfileService`（档案/偏好），实现 `GetProfile`、`UpdateProfile`、`UpdatePreferences`、Profile 版本冲突处理。
-   - [ ] 新建 `EngagementService`，处理点赞/收藏写入、事件发布、缓存失效。
-   - [ ] 新建 `WatchHistoryService`，处理进度上报、5% 阈值判断、watch log TTL、视频统计累加。
-   - [ ] 新建 `VideoProjectionService`，消费 Catalog 事件更新投影。
-   - [ ] 新建 `VideoStatsService`，提供统计读取/补水接口。
+5. **服务层重建**（进行中）
+   - [x] 新建 `ProfileService`（档案/偏好），实现 `GetProfile`、`UpdateProfile`、`UpdatePreferences`、Profile 版本冲突处理。
+   - [x] 新建 `EngagementService`，处理点赞/收藏写入、事件发布、缓存失效。（事件发布将与 Outbox 集成阶段补充）
+   - [x] 新建 `WatchHistoryService`，处理进度上报、5% 阈值判断、watch log TTL、视频统计累加。（事件节流后续配合任务实现）
+   - [x] 新建 `VideoProjectionService`，消费 Catalog 事件更新投影。（当前提供 Upsert/Query，事件消费稍后在任务阶段补充）
+   - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
    - [ ] 更新 `internal/services/init.go` 注入新服务；旧视频相关服务打上 feature flag。
    - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。
 
 6. **控制器与 DTO**
-   - [ ] 新建 `profile_handler.go`、`engagement_handler.go`、`watch_handler.go`，注册新 gRPC 服务。
-   - [ ] 在 `internal/controllers/dto` 创建 `profile.go`、`engagement.go`、`watch.go`、`pagination.go`，处理请求解析/验证。
-   - [ ] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
-   - [ ] 更新 `internal/controllers/init.go` 和 `internal/infrastructure/grpc_server/grpc_server.go`，根据 feature flag 注册新旧 Handler。
+   - [x] 新建 `profile_handler.go`、`engagement_handler.go`、`watch_handler.go`，注册新 gRPC 服务（当前仅 `ProfileHandler` 完成，engagement/watch handler 待拆分补齐）。
+   - [x] 在 `internal/controllers/dto` 创建 `profile.go`、`engagement.go`、`watch.go`、`pagination.go`，处理请求解析/验证。
+   - [x] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
+   - [ ] 更新 `internal/controllers/init.go` 和 `internal/infrastructure/grpc_server/grpc_server.go`，根据 feature flag 注册新旧 Handler（Profile handler 已注入，flag/旧 handler 迁移待处理）。
    - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时。
 
 7. **异步任务与事件链路**
@@ -308,12 +315,12 @@ sqlc/
 8. **配置、Wire、Feature Flag**
    - [ ] 更新 `configs/config.yaml`：`data.postgres.schema=profile`，新增 `messaging.catalog_inbox`，调整 topic/subscription，加入 feature 开关。
    - [ ] 同步 `.env`、`.env.example`、`.env.test`，新增 PROFILE_* 环境变量。
-   - [ ] 更新 `cmd/grpc/wire.go` 注入新仓储/服务/任务，支持 feature flag。重新生成 `wire_gen.go`。
+   - [ ] 更新 `cmd/grpc/wire.go` 注入新仓储/服务/任务，支持 feature flag 并导出新的 provider 绑定；`services` 包需导出 `OriginalMediaRepository` 等接口，重新生成 `wire_gen.go`。（2025-10-29：`OriginalMediaRepository` 已导出，wire 绑定+`wire_gen.go` 更新完成；feature flag 控制仍待实现）
    - [ ] 评估缓存实现：若引入 Redis，新增配置与 init Provider；若仅 LRU，确保配置项可关闭。
 
 9. **质量与验证**
    - [ ] `make lint`（含 gofumpt、goimports、staticcheck、revive、buf、spectral）。
-   - [ ] `go test ./...`（确保服务/仓储/任务测试覆盖率目标达成）。
+   - [ ] `go test ./...`（确保服务/仓储/任务测试覆盖率目标达成）。（2025-10-29：本轮已手动执行，全部通过，后续纳入 pipeline）
    - [ ] `sqlc generate`、`buf lint && buf breaking`、`spectral lint`、`make proto`（若依赖）。
    - [ ] 编写 e2e 脚本 `test/e2e/profile_flow_test.sh` 并运行一次完整流程。
 

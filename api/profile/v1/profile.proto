@@ -1,0 +1,251 @@
+syntax = "proto3";
+
+package profile.v1;
+
+option go_package = "github.com/bionicotaku/lingo-services-profile/api/profile/v1;profilev1";
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+// ProfileService 暴露用户档案、互动与观看历史相关的核心 RPC。
+service ProfileService {
+  // GetProfile 返回指定用户的档案与偏好信息。
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+
+  // UpdateProfile 更新档案基础信息（昵称、头像等）。
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+
+  // UpdatePreferences 局部更新学习/通知偏好。
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (UpdatePreferencesResponse);
+
+  // MutateFavorite 新增或取消收藏/点赞。
+  rpc MutateFavorite(MutateFavoriteRequest) returns (MutateFavoriteResponse);
+
+  // BatchQueryFavorite 批量查询视频的收藏/点赞状态与统计。
+  rpc BatchQueryFavorite(BatchQueryFavoriteRequest) returns (BatchQueryFavoriteResponse);
+
+  // ListFavorites 游标分页返回收藏列表。
+  rpc ListFavorites(ListFavoritesRequest) returns (ListFavoritesResponse);
+
+  // UpsertWatchProgress 写入或更新观看进度。
+  rpc UpsertWatchProgress(UpsertWatchProgressRequest) returns (UpsertWatchProgressResponse);
+
+  // ListWatchHistory 返回最近观看记录。
+  rpc ListWatchHistory(ListWatchHistoryRequest) returns (ListWatchHistoryResponse);
+
+  // PurgeUserData 触发用户数据清理流程。
+  rpc PurgeUserData(PurgeUserDataRequest) returns (PurgeUserDataResponse);
+}
+
+// GetProfileRequest 描述档案查询条件。
+message GetProfileRequest {
+  // user_id 为空表示读取当前调用方自身档案；服务身份可指定任意用户。
+  string user_id = 1;
+}
+
+message GetProfileResponse {
+  Profile profile = 1;
+}
+
+// UpdateProfileRequest 更新档案基础信息。
+message UpdateProfileRequest {
+  string user_id = 1;
+  Profile profile = 2;
+  // update_mask 指定需要更新的字段，例如 display_name, avatar_url。
+  google.protobuf.FieldMask update_mask = 3;
+  // 期望的 profile_version，用于乐观锁控制。
+  google.protobuf.Int64Value expected_profile_version = 4;
+  // 幂等键，透传 Idempotency-Key header。
+  string idempotency_key = 5;
+}
+
+message UpdateProfileResponse {
+  Profile profile = 1;
+}
+
+// UpdatePreferencesRequest 局部更新偏好字段。
+message UpdatePreferencesRequest {
+  string user_id = 1;
+  Preferences preferences = 2;
+  google.protobuf.FieldMask update_mask = 3;
+  google.protobuf.Int64Value expected_profile_version = 4;
+  string idempotency_key = 5;
+}
+
+message UpdatePreferencesResponse {
+  Profile profile = 1;
+}
+
+// FavoriteAction 表示收藏/点赞操作类型。
+enum FavoriteAction {
+  FAVORITE_ACTION_UNSPECIFIED = 0;
+  FAVORITE_ACTION_ADD = 1;
+  FAVORITE_ACTION_REMOVE = 2;
+}
+
+// FavoriteType 表示互动类别。
+enum FavoriteType {
+  FAVORITE_TYPE_UNSPECIFIED = 0;
+  FAVORITE_TYPE_LIKE = 1;
+  FAVORITE_TYPE_BOOKMARK = 2;
+}
+
+// MutateFavoriteRequest 执行收藏/点赞写操作。
+message MutateFavoriteRequest {
+  string user_id = 1;
+  string video_id = 2;
+  FavoriteType favorite_type = 3;
+  FavoriteAction action = 4;
+  string idempotency_key = 5;
+  google.protobuf.Timestamp occurred_at = 6;
+}
+
+message MutateFavoriteResponse {
+  FavoriteState state = 1;
+  VideoStats stats = 2;
+}
+
+// BatchQueryFavoriteRequest 批量查询收藏/点赞状态。
+message BatchQueryFavoriteRequest {
+  string user_id = 1;
+  repeated string video_ids = 2;
+  bool include_stats = 3;
+}
+
+message BatchQueryFavoriteResponse {
+  repeated FavoriteSummary summaries = 1;
+}
+
+// ListFavoritesRequest 游标分页收藏列表。
+message ListFavoritesRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListFavoritesResponse {
+  repeated FavoriteItem favorites = 1;
+  string next_page_token = 2;
+}
+
+// UpsertWatchProgressRequest 写入观看进度。
+message UpsertWatchProgressRequest {
+  string user_id = 1;
+  string video_id = 2;
+  WatchProgress progress = 3;
+  string idempotency_key = 4;
+}
+
+message UpsertWatchProgressResponse {
+  WatchProgress progress = 1;
+  VideoStats stats = 2;
+}
+
+// ListWatchHistoryRequest 返回观看历史。
+message ListWatchHistoryRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListWatchHistoryResponse {
+  repeated WatchHistoryEntry items = 1;
+  string next_page_token = 2;
+}
+
+message PurgeUserDataRequest {
+  string user_id = 1;
+}
+
+message PurgeUserDataResponse {
+  // purge_task_id 可用于后台跟踪清理任务。
+  string purge_task_id = 1;
+}
+
+// Profile 表示用户档案。
+message Profile {
+  string user_id = 1;
+  string display_name = 2;
+  string avatar_url = 3;
+  int64 profile_version = 4;
+  Preferences preferences = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// Preferences 表示学习/通知偏好。
+message Preferences {
+  string learning_goal = 1;
+  google.protobuf.Int32Value daily_quota_minutes = 2;
+  // extra 用于保留未结构化的偏好字段（Post-MVP 扩展）。
+  google.protobuf.Struct extra = 99;
+}
+
+// FavoriteState 表示当前收藏/点赞状态。
+message FavoriteState {
+  bool has_liked = 1;
+  bool has_bookmarked = 2;
+  google.protobuf.Timestamp liked_at = 3;
+  google.protobuf.Timestamp bookmarked_at = 4;
+}
+
+// FavoriteItem 表示收藏列表项。
+message FavoriteItem {
+  string video_id = 1;
+  FavoriteType favorite_type = 2;
+  FavoriteState state = 3;
+  VideoMetadata video = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// FavoriteSummary 表示批量查询结果。
+message FavoriteSummary {
+  string video_id = 1;
+  FavoriteState state = 2;
+  VideoStats stats = 3;
+}
+
+// WatchProgress 表示观看进度状态。
+message WatchProgress {
+  int64 position_seconds = 1;
+  double progress_ratio = 2;
+  int64 total_watch_seconds = 3;
+  google.protobuf.Timestamp first_watched_at = 4;
+  google.protobuf.Timestamp last_watched_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  string session_id = 7;
+}
+
+// WatchHistoryEntry 表示观看历史记录。
+message WatchHistoryEntry {
+  string video_id = 1;
+  WatchProgress progress = 2;
+  VideoMetadata video = 3;
+}
+
+// VideoMetadata 从 Catalog 投影来的元数据。
+message VideoMetadata {
+  string video_id = 1;
+  string title = 2;
+  string description = 3;
+  int64 duration_micros = 4;
+  string thumbnail_url = 5;
+  string hls_master_playlist = 6;
+  string status = 7;
+  string visibility_status = 8;
+  google.protobuf.Timestamp published_at = 9;
+  int64 version = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+// VideoStats 表示聚合统计。
+message VideoStats {
+  int64 like_count = 1;
+  int64 bookmark_count = 2;
+  int64 unique_watchers = 3;
+  int64 total_watch_seconds = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}

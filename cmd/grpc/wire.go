@@ -54,6 +54,8 @@ func wireApp(context.Context, configloader.Params) (*kratos.App, func(), error) 
 		wire.Bind(new(services.LifecycleRepo), new(*repositories.VideoRepository)),  // 写仓储绑定
 		wire.Bind(new(services.VideoQueryRepo), new(*repositories.VideoRepository)), // 读仓储绑定
 		wire.Bind(new(services.LifecycleOutboxWriter), new(*repositories.OutboxRepository)),
+		wire.Bind(new(services.OriginalMediaRepository), new(*repositories.VideoRepository)),
+		wire.Bind(new(services.VideoLookupRepo), new(*repositories.VideoRepository)),
 		services.ProviderSet,    // 业务逻辑层
 		controllers.ProviderSet, // 控制器层（gRPC handlers）
 		outboxtasks.ProvideRunner,

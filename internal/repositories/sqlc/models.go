@@ -146,3 +146,149 @@ type CatalogVideoUserEngagementsProjection struct {
 	BookmarkedOccurredAt pgtype.Timestamptz `json:"bookmarked_occurred_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
+
+// 用户对视频的互动记录（点赞、收藏等）
+type ProfileEngagement struct {
+	// 互动所属用户 ID
+	UserID uuid.UUID `json:"user_id"`
+	// 互动目标视频 ID
+	VideoID uuid.UUID `json:"video_id"`
+	// 互动类型：MVP 支持 like/bookmark
+	EngagementType string `json:"engagement_type"`
+	// 创建时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 最近更新时间
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 软删除标记，表示互动被撤销
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+// Inbox 表：记录已消费的外部事件，保障处理幂等性
+type ProfileInboxEvent struct {
+	// 来源事件的唯一标识，保证消费幂等
+	EventID uuid.UUID `json:"event_id"`
+	// 事件来源服务上下文
+	SourceService string `json:"source_service"`
+	EventType     string `json:"event_type"`
+	// 来源聚合根类型
+	AggregateType pgtype.Text `json:"aggregate_type"`
+	// 来源聚合根标识
+	AggregateID pgtype.Text        `json:"aggregate_id"`
+	Payload     []byte             `json:"payload"`
+	ReceivedAt  pgtype.Timestamptz `json:"received_at"`
+	// 事件处理成功的时间戳
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+	LastError   pgtype.Text        `json:"last_error"`
+}
+
+// Outbox 表：与业务事务同库写入，后台扫描发布到事件总线
+type ProfileOutboxEvent struct {
+	EventID uuid.UUID `json:"event_id"`
+	// 聚合根类型（profile 服务内实体）
+	AggregateType string `json:"aggregate_type"`
+	// 聚合根主键
+	AggregateID uuid.UUID `json:"aggregate_id"`
+	// 事件名，使用过去式（如 profile.watch.progressed）
+	EventType string `json:"event_type"`
+	// 事件负载（Protobuf 二进制），包含业务数据快照
+	Payload []byte `json:"payload"`
+	// 事件头部（JSON），用于 trace/idempotency 等
+	Headers    []byte             `json:"headers"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	// 事件可被 Relay 选择的时间
+	AvailableAt pgtype.Timestamptz `json:"available_at"`
+	// 事件成功发布的时间戳
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+	// Outbox Relay 重试次数
+	DeliveryAttempts int32 `json:"delivery_attempts"`
+	// 最近一次投递失败原因
+	LastError pgtype.Text `json:"last_error"`
+	// 发布器租约标记
+	LockToken pgtype.Text `json:"lock_token"`
+	// 租约获取时间
+	LockedAt pgtype.Timestamptz `json:"locked_at"`
+}
+
+// Profile 档案主表，MVP 合并偏好字段
+type ProfileUser struct {
+	// 用户主键，复用 Supabase sub
+	UserID uuid.UUID `json:"user_id"`
+	// 展示昵称
+	DisplayName string `json:"display_name"`
+	// 头像 URL
+	AvatarUrl pgtype.Text `json:"avatar_url"`
+	// 乐观锁版本号
+	ProfileVersion int64 `json:"profile_version"`
+	// 学习/通知偏好 JSON：MVP 仅包含 learning_goal、daily_quota_minutes
+	PreferencesJson []byte `json:"preferences_json"`
+	// 记录创建时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 最近更新时间（触发器维护）
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 视频全局互动/观看统计（MVP 由 Profile 同步维护）
+type ProfileVideoStat struct {
+	// 视频主键
+	VideoID uuid.UUID `json:"video_id"`
+	// 点赞总数
+	LikeCount int64 `json:"like_count"`
+	// 收藏总数
+	BookmarkCount int64 `json:"bookmark_count"`
+	// 独立观看用户数
+	UniqueWatchers int64 `json:"unique_watchers"`
+	// 累计观看时长（秒）
+	TotalWatchSeconds int64 `json:"total_watch_seconds"`
+	// 统计更新时间
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Catalog 视频元数据投影（Profile 消费 catalog.video.* 事件）
+type ProfileVideosProjection struct {
+	// 视频主键
+	VideoID uuid.UUID `json:"video_id"`
+	// 视频标题
+	Title string `json:"title"`
+	// 视频简介
+	Description pgtype.Text `json:"description"`
+	// 视频时长（微秒）
+	DurationMicros pgtype.Int8 `json:"duration_micros"`
+	// 封面 URL
+	ThumbnailUrl pgtype.Text `json:"thumbnail_url"`
+	// 播放清单 URL（来自 Catalog）
+	HlsMasterPlaylist pgtype.Text `json:"hls_master_playlist"`
+	// Catalog 生命周期状态
+	Status pgtype.Text `json:"status"`
+	// 可见性状态
+	VisibilityStatus pgtype.Text `json:"visibility_status"`
+	// 发布时间
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+	// Catalog 版本号（乐观锁）
+	Version int64 `json:"version"`
+	// 同步更新时间
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 用户观看进度日志（MVP 复合主键 user_id+video_id）
+type ProfileWatchLog struct {
+	UserID  uuid.UUID `json:"user_id"`
+	VideoID uuid.UUID `json:"video_id"`
+	// 最近播放位置（秒）
+	PositionSeconds pgtype.Numeric `json:"position_seconds"`
+	// 观看进度（0~1）
+	ProgressRatio pgtype.Numeric `json:"progress_ratio"`
+	// 累计观看时长（秒）
+	TotalWatchSeconds pgtype.Numeric `json:"total_watch_seconds"`
+	// 首次观看时间
+	FirstWatchedAt pgtype.Timestamptz `json:"first_watched_at"`
+	// 最近观看时间
+	LastWatchedAt pgtype.Timestamptz `json:"last_watched_at"`
+	// 保留截止时间（用于 TTL 清理）
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	// 合规脱敏标记（post-MVP）
+	RedactedAt pgtype.Timestamptz `json:"redacted_at"`
+	// 记录创建时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 最近更新时间
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
