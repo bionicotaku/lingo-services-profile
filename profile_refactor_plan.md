@@ -6,7 +6,8 @@
 
 - ✅ 已完成：Profile 服务已彻底剥离 Catalog 模板遗留代码，目录与配置围绕 `profile.*` schema；核心仓储与服务（Profile/Engagement/WatchHistory/VideoProjection/VideoStats）全部重写并通过集成测试；`EngagementService.Mutate` 在事务内写入 `profile.engagement.*` Outbox 事件并附带最新统计；控制层改造完成并依赖 `services/interfaces.go`，覆盖基础参数校验与 Problem 映射单测。
 - ✅ 基线校验：`make lint`（go vet + buf lint + staticcheck + revive）与 `go test ./...` 全量通过；Proto 生成现仅包含 Profile 契约，旧的 catalog API 已清理。
-- 🔧 待办重点：补全 WatchHistory Outbox 事件（`profile.watch.progressed`）及相关任务；实现 Catalog 投影 Inbox Runner 与集成测试；扩展控制层/服务层单测覆盖更多异常分支；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
+- ✅ 新增：补齐 `VideoStatsService` gomock 单测、扩展 `ProfileHandler.ListFavorites` 分支覆盖，并在 README 加入 `go generate ./internal/services/mocks` 与 Docker/Testcontainers 前置说明。
+- 🔧 待办重点：补全 WatchHistory Outbox 事件（`profile.watch.progressed`）及相关任务；实现 Catalog 投影 Inbox Runner 与集成测试；扩展控制层/服务层单测覆盖剩余异常分支（例如 `ListWatchHistory` 元数据缺失、Outbox 失败路径）；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
 - 🎯 下一步：优先实现 WatchHistory 事件链路，其次落地 Inbox Runner 与测试，收尾阶段聚焦单测补强与文档/契约更新。
 
 ---
@@ -293,14 +294,23 @@ sqlc/
    - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
    - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
    - [x] 抽象服务接口（`services/interfaces.go`），供控制层测试替换实现。
-   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。（2025-10-29：新增集成测试 `internal/services/test/watch_history_service_test.go` 等，并补充 gomock 单测 `profile_service_gomock_test.go`、`video_projection_service_mock_test.go`、`watch_history_service_gomock_test.go`、`engagement_service_gomock_test.go` 验证错误路径；VideoStats 等辅助服务仍可扩展）
+   - [x] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑：
+     - [x] ProfileService gomock 场景（版本冲突、偏好增量）。
+     - [x] EngagementService gomock 场景（软删/重复收藏、Outbox 失败兜底）。
+     - [x] WatchHistoryService gomock 场景（5% 节流、事件生成）。
+     - [x] VideoProjectionService gomock 场景（版本回退、可见性切换）。
+     - [x] VideoStatsService gomock 场景（聚合查询成功与仓储错误分支，待补充）。
 
 6. **控制器与 DTO**
    - [x] 合并 Profile 相关 RPC 到 `profile_handler.go`，移除模板遗留的 lifecycle/query handler。
    - [x] 精简 DTO：保留 `dto/profile.go` 处理 gRPC ↔︎ VO 转换，后续按需扩展分页辅助。
    - [x] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
    - [x] 更新 `internal/controllers/init.go` 与 gRPC Server wiring，仅注册 Profile gRPC 服务。
-   - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时。（2025-10-29：`internal/controllers/test/profile_handler_profile_test.go` 已新增版本冲突/unsupported engagement 的错误映射用例，元数据缺失场景仍需补充，其余 Handler 待完善）
+   - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时：
+     - [x] UpdateProfile 版本冲突与偏好校验。
+     - [x] MutateFavorite 不支持类型/幂等键缺失。
+     - [x] ListFavorites 游标分页、metadata 缺失、空列表响应。
+     - [ ] ListWatchHistory 元数据缺失与上下文超时。
 
 7. **异步任务与事件链路**
    - [ ] 更新 `internal/services/engagement_service.go` / outbox pipeline：目前已在 `Mutate` 中发布 `profile.engagement.*` Outbox 事件（含统计快照），仍需整合 WatchProgress 事件与任务指标。
@@ -330,7 +340,10 @@ sqlc/
 
 11. **清理与文档**
     - [ ] 确认新 API 稳定后，删除旧 proto/handler/service/repo/sqlc/migrations，保留必要备份。
-    - [ ] 更新 `services-profile/README.md`、`ARCHITECTURE.md` 反映新实现；在 `CHANGELOG` 或 release notes 记录重构信息。（2025-10-29：`ARCHITECTURE.md` 已补充 Watch Progress 事件与 Catalog Inbox Runner，`services-profile/README.md` 已新增，后续仍需整理变更日志）
+    - [ ] 更新 `services-profile/README.md`、`ARCHITECTURE.md` 反映新实现；在 `CHANGELOG` 或 release notes 记录重构信息：
+      - [x] `ARCHITECTURE.md` 已补充 Watch Progress 事件与 Catalog Inbox Runner（2025-10-29 完成）。
+      - [x] `README.md` 补充 `go generate ./internal/services/mocks` 指南与 Docker/Testcontainers 前置条件。
+      - [ ] 整理 CHANGELOG/发布说明（待上线前完成）。
     - [ ] 维护 `profile_refactor_plan.md` 勾选完成项，存档旧实现要点。
 
 ---

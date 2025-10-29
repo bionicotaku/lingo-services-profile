@@ -12,6 +12,11 @@ Profile 服务负责用户档案、收藏/点赞、观看历史三大核心领�
 - Outbox 发布器：`cmd/tasks/outbox`
 - Catalog Inbox Runner：`cmd/tasks/catalog_inbox`
 
+## 环境前置
+- Go 1.22+
+- Docker Desktop（Testcontainers 启动所需，运行 `make test` 前需确保 Docker 正常运行）
+- `mockgen` 工具：`go install github.com/golang/mock/mockgen@latest`（供 `go generate ./internal/services/mocks` 使用）
+
 ## 常用命令
 ```bash
 # 运行静态检查
@@ -19,6 +24,9 @@ make lint
 
 # 运行全部测试（包含 Testcontainers 集成测试，需本地 Docker 环境）
 make test
+
+# 更新 GoMock 仓储桩（服务/仓储接口变更后执行）
+go generate ./internal/services/mocks
 
 # 启动 gRPC 服务
 make build && ./bin/grpc -conf configs/config.yaml
@@ -33,5 +41,6 @@ go run ./cmd/tasks/catalog_inbox -conf configs/config.yaml
 ## 测试说明
 - Service 层集成测试位于 `internal/services/test`，依赖 Testcontainers 启动 Postgres。
 - Controller 层 gRPC 单测位于 `internal/controllers/test`，覆盖元数据解析与错误映射。
+- 如果本地未运行 Docker，Testcontainers 将无法启动，请在执行测试前确保 Docker/Colima 已经准备就绪。
 
 如需新增文档或任务，请同步更新本 README 的索引，确保同一信息只维护一份。

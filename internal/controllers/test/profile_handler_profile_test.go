@@ -330,3 +330,114 @@ func TestProfileHandler_MutateFavorite_UnsupportedType(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, codes.InvalidArgument, st.Code())
 }
+
+func TestProfileHandler_ListFavorites_InvalidPageToken(t *testing.T) {
+	t.Parallel()
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, uuid.New())
+	_, err := handler.ListFavorites(ctx, &profilev1.ListFavoritesRequest{PageToken: "abc"})
+	require.Error(t, err)
+
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestProfileHandler_ListFavorites_MissingUserMetadata(t *testing.T) {
+	t.Parallel()
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		&engagementServiceStub{},
+		&watchHistoryServiceStub{},
+		&videoProjectionServiceStub{},
+		&videoStatsServiceStub{},
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	_, err := handler.ListFavorites(context.Background(), &profilev1.ListFavoritesRequest{})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	require.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestProfileHandler_ListFavorites_PaginationAndStats(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	now := time.Now().UTC()
+	videoIDs := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+
+	engagements := &engagementServiceStub{
+		listFavoritesFn: func(_ context.Context, input services.ListFavoritesInput) ([]*po.ProfileEngagement, error) {
+			require.Equal(t, userID, input.UserID)
+			require.Equal(t, int32(3), input.Limit)
+			require.Equal(t, int32(0), input.Offset)
+			return []*po.ProfileEngagement{
+				{UserID: userID, VideoID: videoIDs[0], EngagementType: "like", CreatedAt: now, UpdatedAt: now},
+				{UserID: userID, VideoID: videoIDs[1], EngagementType: "bookmark", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+				{UserID: userID, VideoID: videoIDs[2], EngagementType: "bookmark", CreatedAt: now.Add(2 * time.Minute), UpdatedAt: now.Add(2 * time.Minute)},
+			}, nil
+		},
+	}
+
+	projections := &videoProjectionServiceStub{
+		listFn: func(_ context.Context, ids []uuid.UUID) ([]*po.ProfileVideoProjection, error) {
+			require.ElementsMatch(t, videoIDs[:2], ids)
+			return []*po.ProfileVideoProjection{
+				{VideoID: videoIDs[0], Title: "Lesson 1", UpdatedAt: now},
+				{VideoID: videoIDs[1], Title: "Lesson 2", UpdatedAt: now.Add(30 * time.Second)},
+			}, nil
+		},
+	}
+
+	statsCalled := false
+	stats := &videoStatsServiceStub{
+		listFn: func(_ context.Context, ids []uuid.UUID) ([]*po.ProfileVideoStats, error) {
+			statsCalled = true
+			require.ElementsMatch(t, videoIDs[:2], ids)
+			return []*po.ProfileVideoStats{
+				{VideoID: videoIDs[0], LikeCount: 3, BookmarkCount: 1, UpdatedAt: now},
+				{VideoID: videoIDs[1], LikeCount: 1, BookmarkCount: 5, UpdatedAt: now},
+			}, nil
+		},
+	}
+
+	handler := controllers.NewProfileHandler(
+		&profileServiceStub{},
+		engagements,
+		&watchHistoryServiceStub{},
+		projections,
+		stats,
+		controllers.NewBaseHandler(controllers.HandlerTimeouts{}),
+	)
+
+	ctx := metadataContextWithUser(t, userID)
+	resp, err := handler.ListFavorites(ctx, &profilev1.ListFavoritesRequest{PageSize: 2})
+	require.NoError(t, err)
+	require.Equal(t, "2", resp.GetNextPageToken())
+	require.Len(t, resp.GetFavorites(), 2)
+	require.True(t, statsCalled)
+
+	first := resp.GetFavorites()[0]
+	require.Equal(t, videoIDs[0].String(), first.GetVideoId())
+	require.True(t, first.GetState().GetHasLiked())
+	require.False(t, first.GetState().GetHasBookmarked())
+	require.Equal(t, "Lesson 1", first.GetVideo().GetTitle())
+
+	second := resp.GetFavorites()[1]
+	require.Equal(t, videoIDs[1].String(), second.GetVideoId())
+	require.False(t, second.GetState().GetHasLiked())
+	require.True(t, second.GetState().GetHasBookmarked())
+	require.Equal(t, "Lesson 2", second.GetVideo().GetTitle())
+}

@@ -5,20 +5,26 @@ import (
 	"fmt"
 
 	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
-	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
+	"github.com/bionicotaku/lingo-utils/txmanager"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 )
 
+// VideoStatsRepository 抽象视频统计仓储接口，便于测试替换。
+type VideoStatsRepository interface {
+	Get(ctx context.Context, sess txmanager.Session, videoID uuid.UUID) (*po.ProfileVideoStats, error)
+	ListByIDs(ctx context.Context, sess txmanager.Session, videoIDs []uuid.UUID) ([]*po.ProfileVideoStats, error)
+}
+
 // VideoStatsService 提供视频聚合统计的读取能力。
 type VideoStatsService struct {
-	repo *repositories.ProfileVideoStatsRepository
+	repo VideoStatsRepository
 	log  *log.Helper
 }
 
 // NewVideoStatsService 构造 VideoStatsService。
-func NewVideoStatsService(repo *repositories.ProfileVideoStatsRepository, logger log.Logger) *VideoStatsService {
+func NewVideoStatsService(repo VideoStatsRepository, logger log.Logger) *VideoStatsService {
 	return &VideoStatsService{
 		repo: repo,
 		log:  log.NewHelper(logger),
