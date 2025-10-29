@@ -34,7 +34,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 
 	applyMigrations(ctx, t, pool)
 
-	repo := repositories.NewOutboxRepository(pool, log.NewStdLogger(io.Discard), outboxcfg.Config{Schema: "catalog"})
+	repo := repositories.NewOutboxRepository(pool, log.NewStdLogger(io.Discard), outboxcfg.Config{Schema: "profile"})
 
 	eventID := uuid.New()
 	aggregateID := uuid.New()
@@ -42,7 +42,7 @@ func TestOutboxRepositoryIntegration(t *testing.T) {
 		EventID:       eventID,
 		AggregateType: "video",
 		AggregateID:   aggregateID,
-		EventType:     "catalog.video.created",
+		EventType:     "profile.engagement.added",
 		Payload:       []byte(`{"video_id":"` + aggregateID.String() + `"}`),
 		Headers: map[string]string{
 			"schema_version": "v1",
@@ -101,10 +101,10 @@ func startPostgres(ctx context.Context, t *testing.T) (string, func()) {
 		Env: map[string]string{
 			"POSTGRES_PASSWORD": "postgres",
 			"POSTGRES_USER":     "postgres",
-			"POSTGRES_DB":       "catalog",
+			"POSTGRES_DB":       "profile",
 		},
 		WaitingFor: wait.ForSQL("5432/tcp", "postgres", func(host string, port nat.Port) string {
-			return fmt.Sprintf("postgres://postgres:postgres@%s:%s/catalog?sslmode=disable", host, port.Port())
+			return fmt.Sprintf("postgres://postgres:postgres@%s:%s/profile?sslmode=disable", host, port.Port())
 		}).WithStartupTimeout(60 * time.Second),
 	}
 
@@ -122,7 +122,7 @@ func startPostgres(ctx context.Context, t *testing.T) (string, func()) {
 	port, err := container.MappedPort(ctx, "5432")
 	require.NoError(t, err)
 
-	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/catalog?sslmode=disable", host, port.Port())
+	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/profile?sslmode=disable", host, port.Port())
 	cleanup := func() {
 		termCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

@@ -5,9 +5,9 @@
 ## 0. 最新进展（2025-10-29）
 
 - ✅ 已完成：初版 `ProfileHandler`、DTO 与 BaseHandler 元数据改造；repositories/services 层核心实现及集成测试落地。
-- 🔧 进行中：Wire 绑定仍依赖旧接口，需导出 `OriginalMediaRepository` 等接口并更新 `cmd/grpc/wire.go`；gRPC server 需按 feature flag 支持新旧 Handler；Profile/Engagement/Watch handler 单测缺失。
-- ✅ 本轮执行：`OriginalMediaRepository` 接口导出并更新 Wire 绑定，重新生成 `wire_gen.go`，修复 gRPC Server 测试用例参数；`go test ./...` 通过（2025-10-29）。
-- 🎯 下一步（本轮执行重点）：导出并绑定新接口 → 调整 Wire Provider / grpc server 注册 → 拆分 engagement/watch handler 或在 Profile handler 内补齐逻辑 → 编写 Handler gomock 测试 → 运行 `make lint` + `go test ./...`。
+- ✅ 本轮处理：彻底移除模板遗留的 Catalog 生命周期/查询服务、Video Repository、Engagement Runner 等代码；精简 Wire/配置，仅注册 Profile gRPC 接口；迁移脚本与 SQLC 产物全面切换至 `profile.*` schema；`go test ./...` 通过。
+- 🔧 待办：补充 Profile Handler gomock 单测、完善文档与 OpenAPI/Proto 契约校验流程、运行完整 `make lint`。
+- 🎯 下一步：聚焦传输层单测与文档同步，随后执行静态检查与契约校验。
 
 ---
 
@@ -79,8 +79,8 @@
 
 ### 3.2 Catalog → Profile 投影过渡
 
-- 保留现有 catalog schema 迁移不变，直到新 Profile 服务上线；`profile.videos_projection` 通过 Inbox 同步 Catalog 事件。
-- `video_user_engagements_projection` 表（catalog schema）在新 Profile 生效后废弃；迁移期保留但不再写入。
+- ✅ 模板残留的 `catalog.*` 迁移与 SQLC 代码已删除，仓储完全切换至 `profile.*`；如需 Catalog 投影，由 catalog 服务自行维护。
+- `profile.videos_projection` 仍消费 Catalog 事件补水；正式接入时需实现 Inbox consumer（见任务列表）。
 
 ### 3.3 数据清理计划
 
@@ -93,31 +93,26 @@
 
 ## 4. 控制器与 DTO 设计
 
-### 4.1 新控制器目录
+### 4.1 控制器目录
 
 ```
 internal/controllers/
-├── profile_handler.go        // 档案 + 偏好
-├── engagement_handler.go     // 收藏/点赞
-├── watch_handler.go          // 观看历史
-├── video_projection_handler.go (只读补水接口，供内部调用)
+├── profile_handler.go        // gRPC ProfileService（档案 + 互动 + 历史合并）
+├── base_handler.go           // 公共超时/metadata 处理
 └── dto/
-    ├── profile.go
-    ├── engagement.go
-    ├── watch.go
-    └── pagination.go
+    └── profile.go
 ```
 
 ### 4.2 功能要点
 
-- `BaseHandler` 保留；扩展 `HandlerTypeCommand` 超时时间配置。
+- `ProfileHandler` 合并档案、互动、观看历史接口，复用 `BaseHandler` 超时/metadata 能力。
 - DTO 层负责验证字段、抽取 metadata (`x-apigateway-api-userinfo`)、生成 Problem Details。
 - REST 层（若 Gateway 直连）将通过 gRPC Adapter 暴露一致行为；此处聚焦 gRPC Handler。
 
 ### 4.3 兼容旧 Handler
 
-- 在新文件加入前保留 `video_query_handler.go` 等旧 Handler；待新 API 灰度通过后统一删除。
-- Wire 中可通过 feature flag 注入不同 Handler 集合（`ProvideGRPCServer` 根据配置决定注册哪些服务）。
+- ✅ 模板遗留的 `video_query_handler.go`、`lifecycle_handler.go` 已删除；当前服务仅注册 Profile gRPC 接口。
+- 若后续需要保留旧契约，可在新的分支中引入网关 Shim；不再通过 feature flag 切换。
 
 ---
 
@@ -264,7 +259,7 @@ sqlc/
 1. **契约与文档**（进行中）
    - [x] 创建 `api/profile/v1/profile.proto`（定义 RPC、消息、枚举、错误码）。
    - [x] 新建 `api/profile/v1/events.proto`（Outbox 事件 payload）。
-   - [ ] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；临时将 `api/video/v1` 移至 `api/_legacy/video/v1`。（待 legacy 拆除阶段执行）
+   - [ ] 调整 `buf.yaml`、`buf.gen.yaml` 引用新 proto；清理未使用的 `api/video/v1` 契约或迁移至 `_legacy` 目录。
    - [x] 运行 `buf generate && gofumpt && goimports`，确保 `buf lint && buf breaking` 通过。
    - [ ] 更新 REST/OpenAPI 文档（若存在）：新增 Profile 端点、Problem 详情、示例请求。（尚未执行，待新接口定义稳定后补齐）
    - [ ] 更新 `docs/api` 或 README 中的 API 索引链接。（尚未执行）
@@ -272,7 +267,7 @@ sqlc/
 2. **数据库迁移与 SQLC**（进行中）
    - [x] 编写 `migrations/101_create_profile_schema.sql`，包含全部表、索引、触发器、RLS TODO。
   - [x] 将脚本拷贝到 `sqlc/schema/101_profile_schema.sql`，供 SQLC 使用。
-   - [x] 更新 `sqlc.yaml`：新增 profile 输出包（如 `internal/repositories/profiledb`），保留 catalog legacy 配置。
+  - [x] 更新 `sqlc.yaml`：仅保留 profile 输出包（`internal/repositories/profiledb`），删除 catalog legacy 配置。
   - [x] 运行 `sqlc generate`，验证新生成代码编译通过。
    - [ ] 编写数据迁移脚本（可选）：`tools/scripts/migrate_catalog_to_profile.sh`，用于迁移历史交互数据。
 
@@ -295,27 +290,27 @@ sqlc/
    - [x] 新建 `EngagementService`，处理点赞/收藏写入、事件发布、缓存失效。（事件发布将与 Outbox 集成阶段补充）
    - [x] 新建 `WatchHistoryService`，处理进度上报、5% 阈值判断、watch log TTL、视频统计累加。（事件节流后续配合任务实现）
    - [x] 新建 `VideoProjectionService`，消费 Catalog 事件更新投影。（当前提供 Upsert/Query，事件消费稍后在任务阶段补充）
-   - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
-   - [ ] 更新 `internal/services/init.go` 注入新服务；旧视频相关服务打上 feature flag。
-   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。
+ - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
+  - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
+  - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。
 
 6. **控制器与 DTO**
-   - [x] 新建 `profile_handler.go`、`engagement_handler.go`、`watch_handler.go`，注册新 gRPC 服务（当前仅 `ProfileHandler` 完成，engagement/watch handler 待拆分补齐）。
-   - [x] 在 `internal/controllers/dto` 创建 `profile.go`、`engagement.go`、`watch.go`、`pagination.go`，处理请求解析/验证。
+   - [x] 合并 Profile 相关 RPC 到 `profile_handler.go`，移除模板遗留的 lifecycle/query handler。
+   - [x] 精简 DTO：保留 `dto/profile.go` 处理 gRPC ↔︎ VO 转换，后续按需扩展分页辅助。
    - [x] `BaseHandler` 增加 Profile 专属 metadata 提取、幂等键辅助。
-   - [ ] 更新 `internal/controllers/init.go` 和 `internal/infrastructure/grpc_server/grpc_server.go`，根据 feature flag 注册新旧 Handler（Profile handler 已注入，flag/旧 handler 迁移待处理）。
+   - [x] 更新 `internal/controllers/init.go` 与 gRPC Server wiring，仅注册 Profile gRPC 服务。
    - [ ] 编写 Handler 单测（使用 gomock Service），覆盖 Problem Details / metadata / 超时。
 
 7. **异步任务与事件链路**
-   - [ ] 更新 `internal/tasks/outbox` 配置使用 `profile.outbox_events`，新增事件编码器/metrics 标签。
-   - [ ] 新建 `internal/tasks/catalog_inbox` Runner（Pub/Sub Subscriber + Inbox Repo + VideoProjectionService）。
-   - [ ] 调整/替换 `internal/tasks/engagement`：根据新事件语义重命名或废弃；若仍需消费外部事件，更新 handler。
+   - [ ] 更新 `internal/tasks/outbox`，实现 Profile 事件编码与指标埋点（当前仅沿用模板 Publisher）。
+   - [ ] 新建 `internal/tasks/catalog_inbox` Runner（订阅 Catalog 事件，维护 `profile.videos_projection`）。 
+   - [ ] 设计 Profile 自身的 Inbox/聚合任务，替代已删除的 engagement runner。
    - [ ] 添加任务级测试：模拟消息、校验幂等、监控指标。
 
-8. **配置、Wire、Feature Flag**
-   - [ ] 更新 `configs/config.yaml`：`data.postgres.schema=profile`，新增 `messaging.catalog_inbox`，调整 topic/subscription，加入 feature 开关。
+8. **配置与 Wire**
+   - [x] 更新 `configs/config.yaml`：默认 schema 切换为 `profile`，移除 engagement 专用 Pub/Sub 配置。
    - [ ] 同步 `.env`、`.env.example`、`.env.test`，新增 PROFILE_* 环境变量。
-   - [ ] 更新 `cmd/grpc/wire.go` 注入新仓储/服务/任务，支持 feature flag 并导出新的 provider 绑定；`services` 包需导出 `OriginalMediaRepository` 等接口，重新生成 `wire_gen.go`。（2025-10-29：`OriginalMediaRepository` 已导出，wire 绑定+`wire_gen.go` 更新完成；feature flag 控制仍待实现）
+   - [x] 更新 `cmd/grpc/wire.go` / `wire_gen.go`，仅注入 Profile 仓储与服务，移除模板生命周期绑定。
    - [ ] 评估缓存实现：若引入 Redis，新增配置与 init Provider；若仅 LRU，确保配置项可关闭。
 
 9. **质量与验证**

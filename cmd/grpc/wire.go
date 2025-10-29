@@ -15,7 +15,6 @@ import (
 	grpcserver "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/services"
-	engagementtasks "github.com/bionicotaku/lingo-services-profile/internal/tasks/engagement"
 	outboxtasks "github.com/bionicotaku/lingo-services-profile/internal/tasks/outbox"
 
 	"github.com/bionicotaku/lingo-utils/gcjwt"
@@ -51,15 +50,9 @@ func wireApp(context.Context, configloader.Params) (*kratos.App, func(), error) 
 		// grpcclient.ProviderSet, // 暂时不使用, 未来需要调用外部 gRPC 服务时再启用
 		// clients.ProviderSet,    // 暂时不使用, 未来需要调用外部服务时再启用
 		repositories.ProviderSet, // 数据访问层（sqlc）
-		wire.Bind(new(services.LifecycleRepo), new(*repositories.VideoRepository)),  // 写仓储绑定
-		wire.Bind(new(services.VideoQueryRepo), new(*repositories.VideoRepository)), // 读仓储绑定
-		wire.Bind(new(services.LifecycleOutboxWriter), new(*repositories.OutboxRepository)),
-		wire.Bind(new(services.OriginalMediaRepository), new(*repositories.VideoRepository)),
-		wire.Bind(new(services.VideoLookupRepo), new(*repositories.VideoRepository)),
-		services.ProviderSet,    // 业务逻辑层
-		controllers.ProviderSet, // 控制器层（gRPC handlers）
+		services.ProviderSet,     // 业务逻辑层
+		controllers.ProviderSet,  // 控制器层（gRPC handlers）
 		outboxtasks.ProvideRunner,
-		engagementtasks.ProvideRunner,
 		newApp, // 组装 Kratos 应用
 	))
 }

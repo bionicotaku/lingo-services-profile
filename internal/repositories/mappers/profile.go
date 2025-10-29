@@ -132,5 +132,55 @@ func numericToFloat64(num pgtype.Numeric) float64 {
 
 // ToPgTimestamptzPtr 将 *time.Time 转换为 pgtype.Timestamptz。
 func ToPgTimestamptzPtr(t *time.Time) pgtype.Timestamptz {
-	return ToPgTimestamptz(t)
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: t.UTC(), Valid: true}
+}
+
+// ToPgInt8 将 *int64 转换为 pgtype.Int8。
+func ToPgInt8(value *int64) pgtype.Int8 {
+	if value == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *value, Valid: true}
+}
+
+// ToPgText 将 *string 转换为 pgtype.Text。
+func ToPgText(value *string) pgtype.Text {
+	if value == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *value, Valid: true}
+}
+
+func textPtr(value pgtype.Text) *string {
+	if !value.Valid {
+		return nil
+	}
+	v := value.String
+	return &v
+}
+
+func mustTimestamp(value pgtype.Timestamptz) time.Time {
+	if !value.Valid {
+		return time.Time{}
+	}
+	return value.Time.UTC()
+}
+
+func timestampPtr(value pgtype.Timestamptz) *time.Time {
+	if !value.Valid {
+		return nil
+	}
+	t := value.Time.UTC()
+	return &t
+}
+
+func int8Ptr(value pgtype.Int8) *int64 {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Int64
+	return &v
 }

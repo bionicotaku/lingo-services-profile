@@ -58,7 +58,7 @@ data:
     health_check_period: 60s
 
     # 默认 schema（Supabase）
-    schema: catalog
+    schema: profile
     # Supabase Pooler 模式要求禁用 prepared statements
     prepared_statements_enabled: false
     # 是否上报连接池指标
@@ -149,18 +149,6 @@ messaging:
       max_extension: 60s
       max_extension_period: 600s
     exactly_once_delivery: true
-  engagement:
-    project_id: smiling-landing-472320-q0
-    topic_id: profile.engagement.events
-    subscription_id: catalog.profile-engagement.consumer
-    logging_enabled: true
-    metrics_enabled: true
-    receive:
-      num_goroutines: 4
-      max_outstanding_messages: 1000
-      max_outstanding_bytes: 67108864
-      max_extension: 60s
-      max_extension_period: 600s
   outbox:
     batch_size: 100
     tick_interval: 1s
@@ -177,3 +165,10 @@ messaging:
     max_concurrency: 4
     logging_enabled: true
     metrics_enabled: true
+
+# 功能开关：用于灰度切换新旧 Handler
+features:
+  # 是否启用 Profile gRPC 接口
+  enable_profile_api: true
+  # 是否保留 Catalog 旧版生命周期/查询 Handler
+  enable_legacy_catalog_api: true

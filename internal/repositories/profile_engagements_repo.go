@@ -82,7 +82,7 @@ func (r *ProfileEngagementsRepository) SoftDelete(ctx context.Context, sess txma
 		UserID:         input.UserID,
 		VideoID:        input.VideoID,
 		EngagementType: input.EngagementType,
-		DeletedAt:      mappers.ToPgTimestamptz(input.DeletedAt),
+		DeletedAt:      mappers.ToPgTimestamptzPtr(input.DeletedAt),
 	}
 	if err := queries.SoftDeleteEngagement(ctx, params); err != nil {
 		r.log.WithContext(ctx).Errorf("soft delete engagement failed: user=%s video=%s type=%s err=%v", input.UserID, input.VideoID, input.EngagementType, err)

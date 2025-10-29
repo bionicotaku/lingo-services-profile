@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	configloader "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
-	"github.com/bionicotaku/lingo-services-profile/internal/tasks/engagement"
 	obswire "github.com/bionicotaku/lingo-utils/observability"
 	outboxpublisher "github.com/bionicotaku/lingo-utils/outbox/publisher"
 	"github.com/go-kratos/kratos/v2"
@@ -34,7 +33,6 @@ func newApp(
 	gs *grpc.Server,
 	meta configloader.ServiceInfo,
 	publisher *outboxpublisher.Runner,
-	engagementRunner *engagement.Runner,
 ) *kratos.App {
 	options := []kratos.Option{
 		kratos.ID(meta.InstanceID),
@@ -54,10 +52,6 @@ func newApp(
 	if publisher != nil {
 		workers = append(workers, worker{name: "outbox publisher", run: publisher.Run})
 	}
-	if engagementRunner != nil {
-		workers = append(workers, worker{name: "engagement consumer", run: engagementRunner.Run})
-	}
-
 	if len(workers) > 0 {
 		var (
 			wg      sync.WaitGroup

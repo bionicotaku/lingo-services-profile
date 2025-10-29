@@ -1,8 +1,6 @@
 package configloader
 
 import (
-	"context"
-
 	"github.com/bionicotaku/lingo-utils/gcjwt"
 	"github.com/bionicotaku/lingo-utils/gclog"
 	"github.com/bionicotaku/lingo-utils/gcpubsub"
@@ -15,12 +13,6 @@ import (
 
 	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 )
-
-// EngagementPubSubConfig 包装 engagement 订阅所需的 gcpubsub.Config，避免与主 Pub/Sub 冲突。
-type EngagementPubSubConfig gcpubsub.Config
-
-// EngagementSubscriber 标签化 engagement 订阅者实例，避免与主订阅者冲突。
-type EngagementSubscriber gcpubsub.Subscriber
 
 // ProviderSet 暴露配置加载相关的依赖注入入口。
 var ProviderSet = wire.NewSet(
@@ -37,9 +29,7 @@ var ProviderSet = wire.NewSet(
 	ProvideClientConfig,
 	ProvideMessagingConfig,
 	ProvidePubSubConfig,
-	ProvideEngagementConfig,
 	ProvidePubSubDependencies,
-	ProvideEngagementSubscriber,
 	ProvideOutboxConfig,
 	ProvideHandlerTimeouts,
 )
@@ -215,12 +205,6 @@ func ProvidePubSubConfig(msg MessagingConfig) gcpubsub.Config {
 	return toGCPubSubConfig(msg.PubSub)
 }
 
-// ProvideEngagementConfig 返回 engagement Pub/Sub 配置包装。
-func ProvideEngagementConfig(msg MessagingConfig) EngagementPubSubConfig {
-	cfg := toGCPubSubConfig(msg.Engagement)
-	return EngagementPubSubConfig(cfg)
-}
-
 func toGCPubSubConfig(cfg PubSubConfig) gcpubsub.Config {
 	if cfg.ProjectID == "" {
 		return gcpubsub.Config{}
@@ -249,19 +233,6 @@ func toGCPubSubConfig(cfg PubSubConfig) gcpubsub.Config {
 // ProvidePubSubDependencies 注入 Pub/Sub 依赖。
 func ProvidePubSubDependencies(logger log.Logger) gcpubsub.Dependencies {
 	return gcpubsub.Dependencies{Logger: logger}
-}
-
-// ProvideEngagementSubscriber 构造 engagement Subscriber。
-func ProvideEngagementSubscriber(ctx context.Context, cfg EngagementPubSubConfig, deps gcpubsub.Dependencies) (EngagementSubscriber, func(), error) {
-	base := gcpubsub.Config(cfg)
-	if base.ProjectID == "" || base.SubscriptionID == "" {
-		return EngagementSubscriber(nil), func() {}, nil
-	}
-	comp, cleanup, err := gcpubsub.NewComponent(ctx, base, deps)
-	if err != nil {
-		return EngagementSubscriber(nil), cleanup, err
-	}
-	return EngagementSubscriber(gcpubsub.ProvideSubscriber(comp)), cleanup, nil
 }
 
 // ProvideOutboxConfig 构造 outboxcfg.Config。

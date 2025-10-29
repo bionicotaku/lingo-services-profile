@@ -178,15 +178,14 @@ func messagingFromProto(msg *configpb.Messaging, data *configpb.Data) MessagingC
 		return MessagingConfig{}
 	}
 	cfg := MessagingConfig{
-		PubSub:     pubsubFromProto(msg.GetPubsub()),
-		Engagement: pubsubFromProto(msg.GetEngagement()),
-		Outbox:     outboxFromProto(msg.GetOutbox()),
-		Inbox:      inboxFromProto(msg.GetInbox()),
+		PubSub: pubsubFromProto(msg.GetPubsub()),
+		Outbox: outboxFromProto(msg.GetOutbox()),
+		Inbox:  inboxFromProto(msg.GetInbox()),
 	}
 	if data != nil && data.GetPostgres() != nil {
 		cfg.Schema = data.GetPostgres().GetSchema()
 	}
-	return cfg
+ 	return cfg
 }
 
 func pubsubFromProto(pb *configpb.PubSub) PubSubConfig {

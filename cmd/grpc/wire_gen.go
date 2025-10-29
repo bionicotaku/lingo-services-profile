@@ -8,12 +8,12 @@ package main
 
 import (
 	"context"
+
 	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
-	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
+	grpcserver "github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/services"
-	"github.com/bionicotaku/lingo-services-profile/internal/tasks/engagement"
 	"github.com/bionicotaku/lingo-services-profile/internal/tasks/outbox"
 	"github.com/bionicotaku/lingo-utils/gcjwt"
 	"github.com/bionicotaku/lingo-utils/gclog"
@@ -22,9 +22,7 @@ import (
 	"github.com/bionicotaku/lingo-utils/pgxpoolx"
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2"
-)
 
-import (
 	_ "go.uber.org/automaxprocs"
 )
 
@@ -85,10 +83,7 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 		return nil, nil, err
 	}
 	pool := pgxpoolx.ProvidePool(pgxpoolxComponent)
-	videoRepository := repositories.NewVideoRepository(pool, logger)
-	messagingConfig := configloader.ProvideMessagingConfig(runtimeConfig)
-	configConfig := configloader.ProvideOutboxConfig(messagingConfig)
-	outboxRepository := repositories.NewOutboxRepository(pool, logger, configConfig)
+	profileUsersRepository := repositories.NewProfileUsersRepository(pool, logger)
 	txmanagerConfig := configloader.ProvideTxConfig(runtimeConfig)
 	txmanagerComponent, cleanup5, err := txmanager.NewComponent(txmanagerConfig, pool, logger)
 	if err != nil {
@@ -99,21 +94,6 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 		return nil, nil, err
 	}
 	manager := txmanager.ProvideManager(txmanagerComponent)
-	lifecycleWriter := services.NewLifecycleWriter(videoRepository, outboxRepository, manager, logger)
-	registerUploadService := services.NewRegisterUploadService(lifecycleWriter)
-	originalMediaService := services.NewOriginalMediaService(lifecycleWriter, videoRepository)
-	processingStatusService := services.NewProcessingStatusService(lifecycleWriter, videoRepository)
-	mediaInfoService := services.NewMediaInfoService(lifecycleWriter, videoRepository)
-	aiAttributesService := services.NewAIAttributesService(lifecycleWriter, videoRepository)
-	visibilityService := services.NewVisibilityService(lifecycleWriter, videoRepository)
-	lifecycleService := services.NewLifecycleService(registerUploadService, originalMediaService, processingStatusService, mediaInfoService, aiAttributesService, visibilityService)
-	handlerTimeouts := configloader.ProvideHandlerTimeouts(runtimeConfig)
-	baseHandler := controllers.NewBaseHandler(handlerTimeouts)
-	lifecycleHandler := controllers.NewLifecycleHandler(lifecycleService, baseHandler)
-	videoUserStatesRepository := repositories.NewVideoUserStatesRepository(pool, logger)
-	videoQueryService := services.NewVideoQueryService(videoRepository, videoUserStatesRepository, manager, logger)
-	videoQueryHandler := controllers.NewVideoQueryHandler(videoQueryService, baseHandler)
-	profileUsersRepository := repositories.NewProfileUsersRepository(pool, logger)
 	profileService := services.NewProfileService(profileUsersRepository, manager, logger)
 	profileEngagementsRepository := repositories.NewProfileEngagementsRepository(pool, logger)
 	profileVideoStatsRepository := repositories.NewProfileVideoStatsRepository(pool, logger)
@@ -123,8 +103,13 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	profileVideoProjectionRepository := repositories.NewProfileVideoProjectionRepository(pool, logger)
 	videoProjectionService := services.NewVideoProjectionService(profileVideoProjectionRepository, logger)
 	videoStatsService := services.NewVideoStatsService(profileVideoStatsRepository, logger)
+	handlerTimeouts := configloader.ProvideHandlerTimeouts(runtimeConfig)
+	baseHandler := controllers.NewBaseHandler(handlerTimeouts)
 	profileHandler := controllers.NewProfileHandler(profileService, engagementService, watchHistoryService, videoProjectionService, videoStatsService, baseHandler)
-	server := grpcserver.NewGRPCServer(serverConfig, metricsConfig, serverMiddleware, lifecycleHandler, videoQueryHandler, profileHandler, logger)
+	server := grpcserver.NewGRPCServer(serverConfig, metricsConfig, serverMiddleware, profileHandler, logger)
+	messagingConfig := configloader.ProvideMessagingConfig(runtimeConfig)
+	configConfig := configloader.ProvideOutboxConfig(messagingConfig)
+	outboxRepository := repositories.NewOutboxRepository(pool, logger, configConfig)
 	gcpubsubConfig := configloader.ProvidePubSubConfig(messagingConfig)
 	dependencies := configloader.ProvidePubSubDependencies(logger)
 	gcpubsubComponent, cleanup6, err := gcpubsub.NewComponent(contextContext, gcpubsubConfig, dependencies)
@@ -138,22 +123,8 @@ func wireApp(contextContext context.Context, params configloader.Params) (*krato
 	}
 	publisher := gcpubsub.ProvidePublisher(gcpubsubComponent)
 	runner := outbox.ProvideRunner(outboxRepository, publisher, gcpubsubConfig, configConfig, logger)
-	inboxRepository := repositories.NewInboxRepository(pool, logger, configConfig)
-	engagementPubSubConfig := configloader.ProvideEngagementConfig(messagingConfig)
-	engagementSubscriber, cleanup7, err := configloader.ProvideEngagementSubscriber(contextContext, engagementPubSubConfig, dependencies)
-	if err != nil {
-		cleanup6()
-		cleanup5()
-		cleanup4()
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	engagementRunner := engagement.ProvideRunner(videoUserStatesRepository, inboxRepository, manager, engagementSubscriber, configConfig, logger)
-	app := newApp(observabilityComponent, logger, server, serviceInfo, runner, engagementRunner)
+	app := newApp(observabilityComponent, logger, server, serviceInfo, runner)
 	return app, func() {
-		cleanup7()
 		cleanup6()
 		cleanup5()
 		cleanup4()

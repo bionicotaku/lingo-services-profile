@@ -30,9 +30,9 @@ import (
 )
 
 var defaultOutboxConfig = outboxcfg.Config{
-	Schema: "catalog",
+	Schema: "profile",
 	Inbox: outboxcfg.InboxConfig{
-		SourceService:  "catalog",
+		SourceService:  "profile",
 		MaxConcurrency: 4,
 	},
 }
