@@ -50,9 +50,9 @@ func TestEngagementService_MutateLifecycle(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	verifyEngagementExists(t, ctx, pool, userID, videoID, true)
-	verifyVideoStats(t, ctx, pool, videoID, 1, 0, 0, 0)
-	verifyOutboxCount(t, ctx, pool, "profile.engagement.added", 1)
+    verifyEngagementExists(ctx, t, pool, userID, videoID, true)
+    verifyVideoStats(ctx, t, pool, videoID, 1, 0, 0, 0)
+    verifyOutboxCount(ctx, t, pool, "profile.engagement.added", 1)
 
 	err = svc.Mutate(ctx, services.MutateEngagementInput{
 		UserID:         userID,
@@ -62,9 +62,9 @@ func TestEngagementService_MutateLifecycle(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	verifyEngagementExists(t, ctx, pool, userID, videoID, false)
-	verifyVideoStats(t, ctx, pool, videoID, 0, 0, 0, 0)
-	verifyOutboxCount(t, ctx, pool, "profile.engagement.removed", 2)
+    verifyEngagementExists(ctx, t, pool, userID, videoID, false)
+    verifyVideoStats(ctx, t, pool, videoID, 0, 0, 0, 0)
+    verifyOutboxCount(ctx, t, pool, "profile.engagement.removed", 2)
 
 	err = svc.Mutate(ctx, services.MutateEngagementInput{
 		UserID:         userID,
@@ -75,7 +75,7 @@ func TestEngagementService_MutateLifecycle(t *testing.T) {
 	require.ErrorIs(t, err, services.ErrUnsupportedEngagementType)
 }
 
-func verifyEngagementExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, userID, videoID uuid.UUID, expectActive bool) {
+func verifyEngagementExists(ctx context.Context, t *testing.T, pool *pgxpool.Pool, userID, videoID uuid.UUID, expectActive bool) {
 	t.Helper()
 	var deletedAt *time.Time
 	err := pool.QueryRow(ctx, `select deleted_at from profile.engagements where user_id = $1 and video_id = $2 and engagement_type = 'like'`, userID, videoID).Scan(&deletedAt)
@@ -91,7 +91,7 @@ func verifyEngagementExists(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 	require.NotNil(t, deletedAt)
 }
 
-func verifyVideoStats(t *testing.T, ctx context.Context, pool *pgxpool.Pool, videoID uuid.UUID, like, bookmark, watchers, seconds int64) {
+func verifyVideoStats(ctx context.Context, t *testing.T, pool *pgxpool.Pool, videoID uuid.UUID, like, bookmark, watchers, seconds int64) {
 	t.Helper()
 	var likeCount, bookmarkCount, uniqueWatchers, totalWatchSeconds int64
 	err := pool.QueryRow(ctx, `select like_count, bookmark_count, unique_watchers, total_watch_seconds from profile.video_stats where video_id = $1`, videoID).
@@ -103,7 +103,7 @@ func verifyVideoStats(t *testing.T, ctx context.Context, pool *pgxpool.Pool, vid
 	require.Equal(t, seconds, totalWatchSeconds)
 }
 
-func verifyOutboxCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, eventType string, expected int64) {
+func verifyOutboxCount(ctx context.Context, t *testing.T, pool *pgxpool.Pool, eventType string, expected int64) {
 	t.Helper()
 	var count int64
 	err := pool.QueryRow(ctx, `select count(*) from profile.outbox_events where event_type = $1`, eventType).Scan(&count)

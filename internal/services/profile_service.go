@@ -5,13 +5,19 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bionicotaku/lingo-services-profile/internal/models/po"
 	"github.com/bionicotaku/lingo-services-profile/internal/models/vo"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
-
 	"github.com/bionicotaku/lingo-utils/txmanager"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 )
+
+// ProfileUsersRepository 定义 Profile 仓储行为，便于测试替换。
+type ProfileUsersRepository interface {
+	Get(ctx context.Context, sess txmanager.Session, userID uuid.UUID) (*po.ProfileUser, error)
+	Upsert(ctx context.Context, sess txmanager.Session, input repositories.UpsertProfileUserInput) (*po.ProfileUser, error)
+}
 
 var (
 	// ErrProfileNotFound 表示档案不存在。
@@ -22,13 +28,13 @@ var (
 
 // ProfileService 负责档案与偏好相关的业务逻辑。
 type ProfileService struct {
-	repo      *repositories.ProfileUsersRepository
+	repo      ProfileUsersRepository
 	txManager txmanager.Manager
 	log       *log.Helper
 }
 
 // NewProfileService 构造 ProfileService。
-func NewProfileService(repo *repositories.ProfileUsersRepository, tx txmanager.Manager, logger log.Logger) *ProfileService {
+func NewProfileService(repo ProfileUsersRepository, tx txmanager.Manager, logger log.Logger) *ProfileService {
 	return &ProfileService{
 		repo:      repo,
 		txManager: tx,

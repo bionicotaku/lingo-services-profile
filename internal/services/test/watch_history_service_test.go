@@ -55,9 +55,9 @@ func TestWatchHistoryService_OutboxAndStats(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	verifyWatchLog(t, ctx, watchRepo, userID, videoID, 0.30, 180)
-	verifyStats(t, ctx, statsRepo, videoID, 1, 180)
-	require.Equal(t, int64(1), countOutboxEvents(t, ctx, pool), "expected watch progressed event enqueued")
+    verifyWatchLog(ctx, t, watchRepo, userID, videoID, 0.30, 180)
+    verifyStats(ctx, t, statsRepo, videoID, 1, 180)
+    require.Equal(t, int64(1), countOutboxEvents(ctx, t, pool), "expected watch progressed event enqueued")
 
 	// Progress increase below threshold: no additional event, but stats accumulate seconds delta.
 	lastWatched2 := time.Now().UTC().Add(2 * time.Minute)
@@ -71,12 +71,12 @@ func TestWatchHistoryService_OutboxAndStats(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	verifyWatchLog(t, ctx, watchRepo, userID, videoID, 0.33, 240)
-	verifyStats(t, ctx, statsRepo, videoID, 1, 240)
-	require.Equal(t, int64(1), countOutboxEvents(t, ctx, pool), "progress delta below threshold should not emit new event")
+    verifyWatchLog(ctx, t, watchRepo, userID, videoID, 0.33, 240)
+    verifyStats(ctx, t, statsRepo, videoID, 1, 240)
+    require.Equal(t, int64(1), countOutboxEvents(ctx, t, pool), "progress delta below threshold should not emit new event")
 }
 
-func verifyWatchLog(t *testing.T, ctx context.Context, repo *repositories.ProfileWatchLogsRepository, userID, videoID uuid.UUID, expectedRatio float64, expectedSeconds float64) {
+func verifyWatchLog(ctx context.Context, t *testing.T, repo *repositories.ProfileWatchLogsRepository, userID, videoID uuid.UUID, expectedRatio float64, expectedSeconds float64) {
 	t.Helper()
 	rec, err := repo.Get(ctx, nil, userID, videoID)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func verifyWatchLog(t *testing.T, ctx context.Context, repo *repositories.Profil
 	require.InDelta(t, expectedSeconds, rec.TotalWatchSeconds, 1e-6)
 }
 
-func verifyStats(t *testing.T, ctx context.Context, repo *repositories.ProfileVideoStatsRepository, videoID uuid.UUID, expectedWatchers, expectedSeconds int64) {
+func verifyStats(ctx context.Context, t *testing.T, repo *repositories.ProfileVideoStatsRepository, videoID uuid.UUID, expectedWatchers, expectedSeconds int64) {
 	t.Helper()
 	rec, err := repo.Get(ctx, nil, videoID)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func verifyStats(t *testing.T, ctx context.Context, repo *repositories.ProfileVi
 	require.Equal(t, expectedSeconds, rec.TotalWatchSeconds)
 }
 
-func countOutboxEvents(t *testing.T, ctx context.Context, pool *pgxpool.Pool) int64 {
+func countOutboxEvents(ctx context.Context, t *testing.T, pool *pgxpool.Pool) int64 {
 	t.Helper()
 	var cnt int64
 	err := pool.QueryRow(ctx, `select count(*) from profile.outbox_events where event_type = 'profile.watch.progressed'`).Scan(&cnt)

@@ -1,3 +1,4 @@
+// Package cataloginbox provides Catalog Inbox runners that hydrate profile video projections.
 package cataloginbox
 
 import (

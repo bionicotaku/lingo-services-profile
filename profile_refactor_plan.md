@@ -293,7 +293,7 @@ sqlc/
    - [x] 新建 `VideoStatsService`，提供统计读取/补水接口。
    - [x] 更新 `internal/services/init.go`，仅注入 Profile 相关服务，移除视频模板绑定。
    - [x] 抽象服务接口（`services/interfaces.go`），供控制层测试替换实现。
-   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。（2025-10-29：新增 `internal/services/test/watch_history_service_test.go`、`internal/services/test/engagement_service_test.go`，使用 Testcontainers 验证 WatchHistory 与 Engagement 事件链路；Profile/Projection 服务待补）
+   - [ ] 写服务单测（gomock 仓储 + fake clock/cache），覆盖成功/错误路径、事件发布逻辑。（2025-10-29：新增 `internal/services/test/watch_history_service_test.go`、`internal/services/test/engagement_service_test.go`、`internal/services/test/profile_service_test.go`、`internal/services/test/video_projection_service_test.go`，并补充 `internal/services/test/profile_service_gomock_test.go`、`video_projection_service_mock_test.go` 使用 gomock 验证仓储错误；其余服务待补更细覆盖）
 
 6. **控制器与 DTO**
    - [x] 合并 Profile 相关 RPC 到 `profile_handler.go`，移除模板遗留的 lifecycle/query handler。
@@ -330,7 +330,7 @@ sqlc/
 
 11. **清理与文档**
     - [ ] 确认新 API 稳定后，删除旧 proto/handler/service/repo/sqlc/migrations，保留必要备份。
-    - [ ] 更新 `services-profile/README.md`、`ARCHITECTURE.md` 反映新实现；在 `CHANGELOG` 或 release notes 记录重构信息。（2025-10-29：`ARCHITECTURE.md` 已补充 Watch Progress 事件与 Catalog Inbox Runner，README 待补）
+    - [ ] 更新 `services-profile/README.md`、`ARCHITECTURE.md` 反映新实现；在 `CHANGELOG` 或 release notes 记录重构信息。（2025-10-29：`ARCHITECTURE.md` 已补充 Watch Progress 事件与 Catalog Inbox Runner，`services-profile/README.md` 已新增，后续仍需整理变更日志）
     - [ ] 维护 `profile_refactor_plan.md` 勾选完成项，存档旧实现要点。
 
 ---
