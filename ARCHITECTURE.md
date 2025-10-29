@@ -22,15 +22,15 @@
 
 | 层级 | 字段 | 说明 | 来源 |
 | --- | --- | --- | --- |
-| 基础信息 | `user_id`(UUID)、`supabase_sub`、`email`(可选)、`display_name`、`avatar_url`、`preferred_locale`、`preferred_timezone`、`account_status`(`active`/`suspended`/`deleted`)、`created_at`、`updated_at` | 用户基本属性与账户状态；`supabase_sub` 用于与 Supabase 同步 | Profile 同步 Supabase |
-| 学习偏好 | `learning_goal`(enum)、`target_score`、`daily_quota_minutes`、`preferred_difficulty_band`、`interests[]`（主题标签）、`content_filters`（如区域/口音/字幕偏好） | 驱动 Feed/Progress 个性化 | 用户设置 via Gateway |
-| 通知偏好 | `email_opt_in`、`push_opt_in`、`reminder_schedule`、`quiet_hours` | 控制运营通知与学习提醒 | 用户设置 & Support |
-| 安全与合规 | `gdpr_consent_at`、`marketing_consent_at`、`last_export_at`、`pending_deletion_at` | 数据出入流程的合规字段 | Support/运营流程 |
+| 基础信息 | `user_id`(UUID)、`display_name`、`avatar_url`、`profile_version`、`created_at`、`updated_at` | 用户基本属性与账户状态版本号；MVP 直接复用 Supabase `sub` 作为 `user_id`，不单独存储 `supabase_sub` | Profile 同步 Supabase |
+| 学习偏好 | `learning_goal`、`daily_quota_minutes`（其余偏好字段以 JSON 预留） | 驱动 Feed/Progress 个性化；MVP 仅落实最小字段，扩展偏好以 `preferences_json` 延伸 | 用户设置 via Gateway |
+| 通知偏好（post-MVP） | `email_opt_in`、`push_opt_in`、`reminder_schedule`、`quiet_hours` | 控制运营通知与学习提醒，MVP 暂通过前端持有 | 用户设置 & Support |
+| 安全与合规（post-MVP） | `gdpr_consent_at`、`marketing_consent_at`、`last_export_at`、`pending_deletion_at`、`account_status` | 数据出入流程的合规字段，待合规流程上线后再拆分 | Support/运营流程 |
 
 - **不变量**：
-  - `account_status=deleted` 时禁止返回任何非公开字段，并触发异步清理历史互动数据。
-  - `preferred_timezone` 必须符合 IANA TZ 名称；若缺省则继承 Supabase 用户设置。
-  - 偏好字段需具备版本号（`preferences_version`），便于幂等与冲突检测。
+  - `account_status=deleted`（post-MVP） 时禁止返回任何非公开字段，并触发异步清理历史互动数据。
+  - `preferred_timezone`（post-MVP）必须符合 IANA TZ 名称；若缺省则继承 Supabase 用户设置。
+  - 偏好写入需比对 `profile_version` 乐观锁，避免多端覆盖。
 - **领域行为**：
   - `UpdateProfileInfo`：更新显示名、头像、语言等，同时递增 `profile_version`。
   - `UpdatePreferences`：局部更新学习/通知偏好，记录差异并写入 Outbox。
@@ -40,10 +40,9 @@
 
 | 维度 | 字段 | 说明 | 来源 |
 | --- | --- | --- | --- |
-| 收藏 | `favorite_id`(ULID)、`user_id`、`video_id`、`created_at`、`source`(manual/recommendation/system) | 点赞/收藏记录；`source` 用于推荐策略回溯。视频元数据通过 `profile.videos_projection` 补水，不直接存放在此表。 | Gateway → Profile |
-| 点赞 | `like_state`（bool）、`last_liked_at` | 是否点赞与时间；与收藏复用同张表（`favorite_type`）或独立列 | Gateway |
-| 观看历史 | `watch_id`(ULID)、`video_id`、`position_seconds`、`progress_ratio`、`session_id`、`last_watched_at`、`device` | 记录最近观看进度；用于继续播放、冷启动推荐；同样依赖 `profile.videos_projection` 承担详情补水。 | Telemetry/客户端回调 |
-| compliance | `expires_at`（可空）、`redacted_at` | Watch log 的保留与清理状态 | 数据保留策略 |
+| 收藏/点赞 | `user_id`、`video_id`、`engagement_type`(`like`/`bookmark`)、`created_at`、`updated_at`、`deleted_at`、`source`(post-MVP) | 以复合主键 `(user_id, video_id, engagement_type)` 记录互动，软删除表示撤销；`source` 后续拓展行为分析。视频元数据通过 `profile.videos_projection` 补水。 | Gateway → Profile |
+| 观看历史 | `user_id`、`video_id`、`position_seconds`、`progress_ratio`、`total_watch_seconds`、`first_watched_at`、`last_watched_at`、`expires_at`、`redacted_at`(post-MVP)、`session_id`(post-MVP) | 记录最近观看进度及累计时长；用于继续观看、冷启动推荐；依赖 `profile.videos_projection` 补充展示内容。 | Telemetry/客户端回调 |
+| 合规 | `redacted_at`(post-MVP)、保留策略配置 | Watch log 的保留与清理状态 | 数据保留策略 |
 
 - **不变量**：
   - 同一 `user_id + video_id` 只允许存在一条收藏记录（ON CONFLICT UPSERT）；删除操作使用软删除字段 `deleted_at`。
@@ -57,7 +56,7 @@
 
 - `PreferenceDelta`：记录偏好变更字段、旧值/新值，随事件一起发布。
 - `FavoriteSummary`：聚合收藏数量、最近一次收藏时间，用于 Feed 个性化。
-- `WatchCursor`：游标分页结构，包含 `last_watched_at` 与 `watch_id`。
+- `WatchCursor`：游标分页结构，包含 `last_watched_at` 与 `video_id`（无单独 `watch_id` 时采用二级排序键）。
 
 ---
 
@@ -253,8 +252,8 @@ end$$;
 - `thumbnail_url` (text)：封面 URL。
 - `hls_master_playlist` (text)：播放清单 URL（来自 Catalog `videos.hls_master_playlist`）。
 - `status` (enum)：Catalog 生命周期状态（`pending`/`ready`/`published`...）。
-- `visibility_status` (enum `public`/`unlisted`/`private`, post-MVP)：可见性状态；Catalog 当前字段仍在预留阶段，后续上线后补入。
-- `published_at` (timestamptz, nullable, post-MVP)：发布时间，待 Safety/运营流程启用时回填。
+- `visibility_status` (enum `public`/`unlisted`/`private`)：可见性状态（MVP 直接承接 Catalog 字段，用于客户端过滤）。
+- `published_at` (timestamptz, nullable)：发布时间（MVP 透传 Catalog 数据，支持时间排序）。
 - `version` (bigint)：同步自 Catalog `videos.version`，用于幂等/增量更新。若对外需要 ETag，可在响应层基于 `version` 生成。
 - `updated_at` (timestamptz)：最近同步时间。
 
@@ -296,7 +295,7 @@ create index if not exists profile_videos_projection_updated_idx
 #### `profile.video_stats`
 - `video_id` (uuid/ulid, PK)：目标视频。
 - `like_count` (bigint)：点赞总数（`engagement_type=like` 且未软删）。
-- `favorite_count` (bigint)：收藏总数（`engagement_type=bookmark` 且未软删）。
+- `bookmark_count` (bigint)：收藏总数（`engagement_type=bookmark` 且未软删）。
 - `unique_watchers` (bigint)：累计观看人数，依据 `profile.watch_logs` 中首次观看记录（按 `user_id` 去重）计算。
 - `total_watch_seconds` (bigint)：累计观看时长，来源于 watch log 聚合。
 - `updated_at` (timestamptz)：最近刷新时间。
@@ -308,7 +307,7 @@ create index if not exists profile_videos_projection_updated_idx
 create table if not exists profile.video_stats (
   video_id            uuid primary key,                              -- 视频主键
   like_count          bigint not null default 0,                     -- 点赞总数
-  favorite_count      bigint not null default 0,                     -- 收藏总数
+  bookmark_count      bigint not null default 0,                     -- 收藏总数
   unique_watchers     bigint not null default 0,                     -- 独立观看用户数
   total_watch_seconds bigint not null default 0,                     -- 累计观看时长（秒）
   updated_at          timestamptz not null default now()             -- 统计更新时间
@@ -317,7 +316,7 @@ create table if not exists profile.video_stats (
 comment on table profile.video_stats is '视频全局互动/观看统计（MVP 由 Profile 同步维护）';
 comment on column profile.video_stats.video_id is '视频主键';
 comment on column profile.video_stats.like_count is '点赞总数';
-comment on column profile.video_stats.favorite_count is '收藏总数';
+comment on column profile.video_stats.bookmark_count is '收藏总数';
 comment on column profile.video_stats.unique_watchers is '独立观看用户数';
 comment on column profile.video_stats.total_watch_seconds is '累计观看时长（秒）';
 comment on column profile.video_stats.updated_at is '统计更新时间';
@@ -417,13 +416,13 @@ services-profile/
 
 | 方法 | 用途 | 备注 |
 | --- | --- | --- |
-| `GetProfile(GetProfileRequest) returns (GetProfileResponse)` | 返回用户档案与偏好；支持 `If-None-Match`（ETag 基于 `profile_version` & `preferences_version`） | 只允许本人或服务身份；匿名调用返回 401 |
+| `GetProfile(GetProfileRequest) returns (GetProfileResponse)` | 返回用户档案与偏好；支持 `If-None-Match`（ETag 基于 `profile_version`） | 只允许本人或服务身份；匿名调用返回 401 |
 | `UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse)` | 更新基础信息与通知偏好；要求 `Idempotency-Key` 与 `expected_profile_version` | 幂等：重复请求返回最新版本 |
 | `UpdatePreferences(UpdatePreferencesRequest)` | 局部更新学习偏好；`fields_mask` 控制更新字段（事件推送留待后续） | 超时 500ms |
 | `GetFavorites(GetFavoritesRequest)` | 游标分页返回收藏视频 ID 列表 | 支持 `page_size`、`cursor` |
-| `MutateFavorite(MutateFavoriteRequest)` | 新增/取消收藏或点赞；操作类型 `ADD`/`REMOVE`; 支持 `favorite_type` | 响应包含 `favorite_state`，并返回最新 `like_count`/`favorite_count`（来自 `profile.video_stats`） |
-| `BatchQueryFavorite(BatchQueryFavoriteRequest)` | 批量获取给定 video_id 对应的收藏/点赞布尔值及统计 | Catalog 在详情页补数使用；返回字段含 `has_liked`、`has_bookmarked`、`like_count`、`favorite_count`、`unique_watchers` |
-| `UpsertWatchProgress(UpsertWatchProgressRequest)` | 写入观看进度；带 `session_id` 与播放位置 | 由 Telemetry 或客户端调用 |
+| `MutateFavorite(MutateFavoriteRequest)` | 新增/取消收藏或点赞；操作类型 `ADD`/`REMOVE`; 支持 `favorite_type` | 响应包含 `favorite_state`，并返回最新 `like_count`/`bookmark_count`（来自 `profile.video_stats`） |
+| `BatchQueryFavorite(BatchQueryFavoriteRequest)` | 批量获取给定 video_id 对应的收藏/点赞布尔值及统计 | Catalog 在详情页补数使用；返回字段含 `has_liked`、`has_bookmarked`、`like_count`、`bookmark_count`、`unique_watchers` |
+| `UpsertWatchProgress(UpsertWatchProgressRequest)` | 写入观看进度；接受 `session_id`（Post-MVP 持久化）与播放位置 | 由 Telemetry 或客户端调用 |
 | `ListWatchHistory(ListWatchHistoryRequest)` | 分页返回最近观看列表 | `cursor` 基于 `last_watched_at`；每项含视频全局统计（调用 `profile.video_stats`） |
 | `PurgeUserData(PurgeUserDataRequest)` | Support 数据删除流程调用；触发异步清理并返回任务 ID | 受限于服务角色 |
 
@@ -463,7 +462,7 @@ services-profile/
 | --- | --- | --- | --- |
 | `profile.engagement.added` | 收藏/点赞等互动新增 | `user_id`, `video_id`, `engagement_type`, `created_at`, `source` | Feed（推荐权重）、Catalog（异步写 user_state_view）、Telemetry（行为对账） |
 | `profile.engagement.removed` | 收藏/点赞等互动删除 | 同上 + `deleted_at` | 同上 |
-| `profile.watch.progressed` | 观看记录更新（进度变化 ≥5% 或状态从无到有） | `user_id`, `video_id`, `progress_ratio`, `position_seconds`, `last_watched_at`, `session_id` | Feed（继续看推荐）、Report（活跃度统计）；MVP 仅在进度首次记录或变更 ≥5% 时发出，避免播放心跳产生过量事件 |
+| `profile.watch.progressed` | 观看记录更新（进度变化 ≥5% 或状态从无到有） | `user_id`, `video_id`, `progress_ratio`, `position_seconds`, `last_watched_at`, `total_watch_seconds`（新增累计时长），`session_id`(post-MVP) | Feed（继续看推荐）、Report（活跃度统计）；MVP 仅在进度首次记录或变更 ≥5% 时发出，避免播放心跳产生过量事件；`session_id` 将在 Telemetry 管道成熟后再加入 |
 | `profile.user.deletion.scheduled` | 用户提交删除申请 | `user_id`, `scheduled_at`, `delete_after` | Support（协调删除）、Telemetry（停止继续采集） |
 | `profile.user.deletion.completed` | 清理任务完成 | `user_id`, `completed_at` | Support、Gateway（登出） |
 
@@ -502,7 +501,7 @@ services-profile/
 ### 7.5 Telemetry ↔ Profile
 
 - Telemetry 可直接调用 `UpsertWatchProgress` 或将观看事件写入队列，由 Profile 背景任务消费。
-- Watch log 的 session_id 与 Telemetry 事件保持一致，便于追踪。
+- Watch log 的 `session_id` 字段计划在 Post-MVP 阶段落库，与 Telemetry 事件保持一致，便于追踪。
 
 ### 7.6 Support / Compliance ↔ Profile
 
@@ -555,7 +554,7 @@ services-profile/
 | --- | --- | --- |
 | 缓存一致性 | 本地缓存导致收藏状态短暂不一致 | 写操作后主动失效缓存；设置短 TTL；提供批量查询保证最终一致。 |
 | 观看日志膨胀 | 高频事件导致表快速增长 | 设置 `expires_at` + 后台裁剪；可选将冷数据导出至冷存储。 |
-| 偏好冲突 | 客户端多端并发修改偏好 | 使用 `preferences_version` 乐观锁；冲突返回 Problem `profile.errors.preference_conflict`。 |
+| 偏好冲突 | 客户端多端并发修改偏好 | 使用 `profile_version` 乐观锁；冲突返回 Problem `profile.errors.preference_conflict`。 |
 | 隐私违规 | 未授权服务读取用户数据 | 强制服务身份认证 + RLS；审计日志定期巡检。 |
 | Outbox 堵塞 | 大量事件导致延迟 | 增加并行发布 worker；监控 `profile_outbox_lag_seconds`；必要时分 topic。 |
 | 批量查询压力 | Catalog 批量查询点赞导致热点 | 支持批量接口 + 限制最大请求数（默认 100）；对热点用户启用缓存。 |
@@ -577,9 +576,4 @@ services-profile/
 
 - **v0.1（2025-10-27）**：首版草案，覆盖领域模型、数据结构、契约、事件、非功能与路线图。
 
-> TODO：补充实际迁移脚本、sqlc 输出路径说明、事件 JSON Schema。
-- `source` (enum `manual`/`recommendation`/`system`)：触发来源，便于分析策略。
-- `metadata` (jsonb, post-MVP)：可选上下文（终端、入口等），MVP 暂不存储，待需要更多分析维度时再启用。
-- `created_at` / `updated_at` (timestamptz)：创建与最近更新时间。
-- `deleted_at` (timestamptz, nullable)：软删除标记，表示互动被撤销。
-- （主键备注）MVP 使用 `(user_id, video_id, engagement_type)` 作为复合主键，同时保留唯一索引，后续若启用 `engagement_id` 会调整为单主键。
+> TODO：补充实际迁移脚本、sqlc 输出路径说明、事件 JSON Schema。字段补充说明：`source` 枚举计划在 Post-MVP 引入以支持行为来源分析；`metadata`(jsonb) 仍作为 Post-MVP 预留扩展；`created_at`/`updated_at`、`deleted_at` 字段在当前迁移中已覆盖；主键策略为 MVP 复合主键 `(user_id, video_id, engagement_type)`，未来启用 `engagement_id` 时再迁移。
