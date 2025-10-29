@@ -202,7 +202,14 @@ func ProvideMessagingConfig(cfg RuntimeConfig) MessagingConfig {
 
 // ProvidePubSubConfig 将 MessagingConfig 转换为 gcpubsub.Config。
 func ProvidePubSubConfig(msg MessagingConfig) gcpubsub.Config {
-	return toGCPubSubConfig(msg.PubSub)
+	cfg, ok := msg.Topics["default"]
+	if !ok {
+		for _, v := range msg.Topics {
+			cfg = v
+			break
+		}
+	}
+	return toGCPubSubConfig(cfg)
 }
 
 func toGCPubSubConfig(cfg PubSubConfig) gcpubsub.Config {
@@ -251,12 +258,25 @@ func ProvideOutboxConfig(msg MessagingConfig) outboxcfg.Config {
 			LoggingEnabled: msg.Outbox.LoggingEnabled,
 			MetricsEnabled: msg.Outbox.MetricsEnabled,
 		},
-		Inbox: outboxcfg.InboxConfig{
-			SourceService:  msg.Inbox.SourceService,
-			MaxConcurrency: msg.Inbox.MaxConcurrency,
-			LoggingEnabled: msg.Inbox.LoggingEnabled,
-			MetricsEnabled: msg.Inbox.MetricsEnabled,
-		},
+	}
+
+	defaultInbox := InboxConfig{}
+	if msg.Inboxes != nil {
+		if inbox, ok := msg.Inboxes["default"]; ok {
+			defaultInbox = inbox
+		} else {
+			for _, inbox := range msg.Inboxes {
+				defaultInbox = inbox
+				break
+			}
+		}
+	}
+
+	cfg.Inbox = outboxcfg.InboxConfig{
+		SourceService:  defaultInbox.SourceService,
+		MaxConcurrency: defaultInbox.MaxConcurrency,
+		LoggingEnabled: defaultInbox.LoggingEnabled,
+		MetricsEnabled: defaultInbox.MetricsEnabled,
 	}
 
 	cfg = cfg.Normalize()

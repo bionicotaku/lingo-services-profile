@@ -16,6 +16,7 @@ Profile 服务负责用户档案、收藏/点赞、观看历史三大核心领�
 - Go 1.22+
 - Docker Desktop（Testcontainers 启动所需，运行 `make test` 前需确保 Docker 正常运行）
 - `mockgen` 工具：`go install github.com/golang/mock/mockgen@latest`（供 `go generate ./internal/services/mocks` 使用）
+- 所有运行时配置以 `configs/config.yaml` 为唯一来源（可按环境复制 `config.$ENV.yaml` 覆盖）；`.env` 仅保留 `DATABASE_URL` 等敏感信息，不再驱动业务开关。
 
 ## 常用命令
 ```bash

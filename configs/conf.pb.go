@@ -272,10 +272,13 @@ func (x *Observability) GetMetrics() *Observability_Metrics {
 }
 
 type Messaging struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pubsub        *PubSub                `protobuf:"bytes,1,opt,name=pubsub,proto3" json:"pubsub,omitempty"`
-	Outbox        *OutboxPublisher       `protobuf:"bytes,2,opt,name=outbox,proto3" json:"outbox,omitempty"`
-	Inbox         *InboxConsumer         `protobuf:"bytes,3,opt,name=inbox,proto3" json:"inbox,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Schema string                 `protobuf:"bytes,1,opt,name=schema,proto3" json:"schema,omitempty"` // 数据库 schema（用于 Outbox/InBox 表）
+	// 支持多个 topic，key 为业务名称，如 "default"、"engagement"
+	Topics map[string]*PubSub `protobuf:"bytes,2,rep,name=topics,proto3" json:"topics,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Outbox *OutboxPublisher   `protobuf:"bytes,3,opt,name=outbox,proto3" json:"outbox,omitempty"`
+	// 支持多个 inbox 消费者，key 为任务名称
+	Inboxes       map[string]*InboxConsumer `protobuf:"bytes,4,rep,name=inboxes,proto3" json:"inboxes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -310,9 +313,16 @@ func (*Messaging) Descriptor() ([]byte, []int) {
 	return file_configs_conf_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *Messaging) GetPubsub() *PubSub {
+func (x *Messaging) GetSchema() string {
 	if x != nil {
-		return x.Pubsub
+		return x.Schema
+	}
+	return ""
+}
+
+func (x *Messaging) GetTopics() map[string]*PubSub {
+	if x != nil {
+		return x.Topics
 	}
 	return nil
 }
@@ -324,9 +334,9 @@ func (x *Messaging) GetOutbox() *OutboxPublisher {
 	return nil
 }
 
-func (x *Messaging) GetInbox() *InboxConsumer {
+func (x *Messaging) GetInboxes() map[string]*InboxConsumer {
 	if x != nil {
-		return x.Inbox
+		return x.Inboxes
 	}
 	return nil
 }
@@ -1617,11 +1627,18 @@ const file_configs_conf_proto_rawDesc = "" +
 	"\x14_grpc_include_health\x1aC\n" +
 	"\x15GlobalAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9d\x01\n" +
-	"\tMessaging\x12*\n" +
-	"\x06pubsub\x18\x01 \x01(\v2\x12.kratos.api.PubSubR\x06pubsub\x123\n" +
-	"\x06outbox\x18\x02 \x01(\v2\x1b.kratos.api.OutboxPublisherR\x06outbox\x12/\n" +
-	"\x05inbox\x18\x03 \x01(\v2\x19.kratos.api.InboxConsumerR\x05inbox\"\xf4\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf7\x02\n" +
+	"\tMessaging\x12\x16\n" +
+	"\x06schema\x18\x01 \x01(\tR\x06schema\x129\n" +
+	"\x06topics\x18\x02 \x03(\v2!.kratos.api.Messaging.TopicsEntryR\x06topics\x123\n" +
+	"\x06outbox\x18\x03 \x01(\v2\x1b.kratos.api.OutboxPublisherR\x06outbox\x12<\n" +
+	"\ainboxes\x18\x04 \x03(\v2\".kratos.api.Messaging.InboxesEntryR\ainboxes\x1aM\n" +
+	"\vTopicsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.kratos.api.PubSubR\x05value:\x028\x01\x1aU\n" +
+	"\fInboxesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
+	"\x05value\x18\x02 \x01(\v2\x19.kratos.api.InboxConsumerR\x05value:\x028\x01\"\xf4\x03\n" +
 	"\x06PubSub\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x19\n" +
@@ -1678,7 +1695,7 @@ func file_configs_conf_proto_rawDescGZIP() []byte {
 	return file_configs_conf_proto_rawDescData
 }
 
-var file_configs_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_configs_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_configs_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),                   // 0: kratos.api.Bootstrap
 	(*Server)(nil),                      // 1: kratos.api.Server
@@ -1703,7 +1720,9 @@ var file_configs_conf_proto_goTypes = []any{
 	nil,                                 // 20: kratos.api.Observability.Tracing.AttributesEntry
 	nil,                                 // 21: kratos.api.Observability.Metrics.HeadersEntry
 	nil,                                 // 22: kratos.api.Observability.Metrics.ResourceAttributesEntry
-	(*durationpb.Duration)(nil),         // 23: google.protobuf.Duration
+	nil,                                 // 23: kratos.api.Messaging.TopicsEntry
+	nil,                                 // 24: kratos.api.Messaging.InboxesEntry
+	(*durationpb.Duration)(nil),         // 25: google.protobuf.Duration
 }
 var file_configs_conf_proto_depIdxs = []int32{
 	1,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -1718,41 +1737,43 @@ var file_configs_conf_proto_depIdxs = []int32{
 	18, // 9: kratos.api.Observability.global_attributes:type_name -> kratos.api.Observability.GlobalAttributesEntry
 	16, // 10: kratos.api.Observability.tracing:type_name -> kratos.api.Observability.Tracing
 	17, // 11: kratos.api.Observability.metrics:type_name -> kratos.api.Observability.Metrics
-	5,  // 12: kratos.api.Messaging.pubsub:type_name -> kratos.api.PubSub
+	23, // 12: kratos.api.Messaging.topics:type_name -> kratos.api.Messaging.TopicsEntry
 	7,  // 13: kratos.api.Messaging.outbox:type_name -> kratos.api.OutboxPublisher
-	8,  // 14: kratos.api.Messaging.inbox:type_name -> kratos.api.InboxConsumer
-	23, // 15: kratos.api.PubSub.publish_timeout:type_name -> google.protobuf.Duration
+	24, // 14: kratos.api.Messaging.inboxes:type_name -> kratos.api.Messaging.InboxesEntry
+	25, // 15: kratos.api.PubSub.publish_timeout:type_name -> google.protobuf.Duration
 	6,  // 16: kratos.api.PubSub.receive:type_name -> kratos.api.Receive
-	23, // 17: kratos.api.Receive.max_extension:type_name -> google.protobuf.Duration
-	23, // 18: kratos.api.Receive.max_extension_period:type_name -> google.protobuf.Duration
-	23, // 19: kratos.api.OutboxPublisher.tick_interval:type_name -> google.protobuf.Duration
-	23, // 20: kratos.api.OutboxPublisher.initial_backoff:type_name -> google.protobuf.Duration
-	23, // 21: kratos.api.OutboxPublisher.max_backoff:type_name -> google.protobuf.Duration
-	23, // 22: kratos.api.OutboxPublisher.publish_timeout:type_name -> google.protobuf.Duration
-	23, // 23: kratos.api.OutboxPublisher.lock_ttl:type_name -> google.protobuf.Duration
-	23, // 24: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	23, // 25: kratos.api.Server.Handlers.default_timeout:type_name -> google.protobuf.Duration
-	23, // 26: kratos.api.Server.Handlers.command_timeout:type_name -> google.protobuf.Duration
-	23, // 27: kratos.api.Server.Handlers.query_timeout:type_name -> google.protobuf.Duration
-	23, // 28: kratos.api.Data.PostgreSQL.max_conn_lifetime:type_name -> google.protobuf.Duration
-	23, // 29: kratos.api.Data.PostgreSQL.max_conn_idle_time:type_name -> google.protobuf.Duration
-	23, // 30: kratos.api.Data.PostgreSQL.health_check_period:type_name -> google.protobuf.Duration
+	25, // 17: kratos.api.Receive.max_extension:type_name -> google.protobuf.Duration
+	25, // 18: kratos.api.Receive.max_extension_period:type_name -> google.protobuf.Duration
+	25, // 19: kratos.api.OutboxPublisher.tick_interval:type_name -> google.protobuf.Duration
+	25, // 20: kratos.api.OutboxPublisher.initial_backoff:type_name -> google.protobuf.Duration
+	25, // 21: kratos.api.OutboxPublisher.max_backoff:type_name -> google.protobuf.Duration
+	25, // 22: kratos.api.OutboxPublisher.publish_timeout:type_name -> google.protobuf.Duration
+	25, // 23: kratos.api.OutboxPublisher.lock_ttl:type_name -> google.protobuf.Duration
+	25, // 24: kratos.api.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	25, // 25: kratos.api.Server.Handlers.default_timeout:type_name -> google.protobuf.Duration
+	25, // 26: kratos.api.Server.Handlers.command_timeout:type_name -> google.protobuf.Duration
+	25, // 27: kratos.api.Server.Handlers.query_timeout:type_name -> google.protobuf.Duration
+	25, // 28: kratos.api.Data.PostgreSQL.max_conn_lifetime:type_name -> google.protobuf.Duration
+	25, // 29: kratos.api.Data.PostgreSQL.max_conn_idle_time:type_name -> google.protobuf.Duration
+	25, // 30: kratos.api.Data.PostgreSQL.health_check_period:type_name -> google.protobuf.Duration
 	14, // 31: kratos.api.Data.PostgreSQL.transaction:type_name -> kratos.api.Data.PostgreSQL.Transaction
 	15, // 32: kratos.api.Data.Client.jwt:type_name -> kratos.api.Data.Client.JWT
-	23, // 33: kratos.api.Data.PostgreSQL.Transaction.default_timeout:type_name -> google.protobuf.Duration
-	23, // 34: kratos.api.Data.PostgreSQL.Transaction.lock_timeout:type_name -> google.protobuf.Duration
+	25, // 33: kratos.api.Data.PostgreSQL.Transaction.default_timeout:type_name -> google.protobuf.Duration
+	25, // 34: kratos.api.Data.PostgreSQL.Transaction.lock_timeout:type_name -> google.protobuf.Duration
 	19, // 35: kratos.api.Observability.Tracing.headers:type_name -> kratos.api.Observability.Tracing.HeadersEntry
-	23, // 36: kratos.api.Observability.Tracing.batch_timeout:type_name -> google.protobuf.Duration
-	23, // 37: kratos.api.Observability.Tracing.export_timeout:type_name -> google.protobuf.Duration
+	25, // 36: kratos.api.Observability.Tracing.batch_timeout:type_name -> google.protobuf.Duration
+	25, // 37: kratos.api.Observability.Tracing.export_timeout:type_name -> google.protobuf.Duration
 	20, // 38: kratos.api.Observability.Tracing.attributes:type_name -> kratos.api.Observability.Tracing.AttributesEntry
 	21, // 39: kratos.api.Observability.Metrics.headers:type_name -> kratos.api.Observability.Metrics.HeadersEntry
-	23, // 40: kratos.api.Observability.Metrics.interval:type_name -> google.protobuf.Duration
+	25, // 40: kratos.api.Observability.Metrics.interval:type_name -> google.protobuf.Duration
 	22, // 41: kratos.api.Observability.Metrics.resource_attributes:type_name -> kratos.api.Observability.Metrics.ResourceAttributesEntry
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	5,  // 42: kratos.api.Messaging.TopicsEntry.value:type_name -> kratos.api.PubSub
+	8,  // 43: kratos.api.Messaging.InboxesEntry.value:type_name -> kratos.api.InboxConsumer
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_configs_conf_proto_init() }
@@ -1771,7 +1792,7 @@ func file_configs_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_configs_conf_proto_rawDesc), len(file_configs_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

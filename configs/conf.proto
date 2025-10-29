@@ -117,9 +117,15 @@ message Observability {
 }
 
 message Messaging {
-  PubSub pubsub = 1;
-  OutboxPublisher outbox = 2;
-  InboxConsumer inbox = 3;
+  string schema = 1; // 数据库 schema（用于 Outbox/InBox 表）
+
+  // 支持多个 topic，key 为业务名称，如 "default"、"engagement"
+  map<string, PubSub> topics = 2;
+
+  OutboxPublisher outbox = 3;
+
+  // 支持多个 inbox 消费者，key 为任务名称
+  map<string, InboxConsumer> inboxes = 4;
 }
 
 message PubSub {
