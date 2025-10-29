@@ -1,0 +1,167 @@
+syntax = "proto3";
+package kratos.api;
+
+option go_package = "github.com/bionicotaku/lingo-services-catalog/configs;configpb";
+
+import "google/protobuf/duration.proto";
+import "buf/validate/validate.proto";
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Observability observability = 3;
+  Messaging messaging = 4;
+}
+
+message Server {
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message JWT {
+    string expected_audience = 1;
+    bool skip_validate = 2;
+    bool required = 3;
+    string header_key = 4;
+  }
+  message Handlers {
+    google.protobuf.Duration default_timeout = 1;
+    google.protobuf.Duration command_timeout = 2;
+    google.protobuf.Duration query_timeout = 3;
+  }
+  GRPC grpc = 1;
+  JWT jwt = 2;
+  Handlers handlers = 3;
+  repeated string metadata_keys = 4;  // 透传 header 列表，如 X-Apigateway-Api-Userinfo（actor 字段 Post-MVP 可追加）
+}
+
+message Data {
+  // PostgreSQL 数据库配置（Supabase 专用）
+  message PostgreSQL {
+    message Transaction {
+      string default_isolation = 1;
+      google.protobuf.Duration default_timeout = 2;
+      google.protobuf.Duration lock_timeout = 3;
+      int32 max_retries = 4;
+      optional bool metrics_enabled = 5;
+    }
+
+    // DSN 连接串（必填）
+    string dsn = 1 [(buf.validate.field).string = { min_len: 1, pattern: "^postgres(ql)?://.*" }];
+
+    // 连接池配置
+    int32 max_open_conns = 2 [(buf.validate.field).int32 = {gte: 1, lte: 100}];
+    int32 min_open_conns = 3 [(buf.validate.field).int32 = {gte: 0, lte: 50}];
+    google.protobuf.Duration max_conn_lifetime = 4;
+    google.protobuf.Duration max_conn_idle_time = 5;
+    google.protobuf.Duration health_check_period = 6;
+
+    // Supabase 特定配置
+    string schema = 7;  // 默认 schema (如 "kratos_template")
+    bool prepared_statements_enabled = 8;  // Pooler 模式建议设为 false
+    Transaction transaction = 9;
+    optional bool pool_metrics_enabled = 10;
+  }
+
+  // gRPC Client 配置（可选，用于服务间调用）
+  message Client {
+    string target = 1;  // 目标地址，留空则不创建 client
+    message JWT {
+      string audience = 1;
+      bool disabled = 2;
+      string header_key = 3;
+    }
+    JWT jwt = 2;
+    repeated string metadata_keys = 3;  // 转发到下游的 header 列表（默认同 server.metadata_keys）
+  }
+
+  PostgreSQL postgres = 1 [(buf.validate.field).required = true];
+  Client grpc_client = 2;
+}
+
+message Observability {
+  message Tracing {
+    bool enabled = 1;
+    string exporter = 2;
+    string endpoint = 3;
+    map<string, string> headers = 4;
+    bool insecure = 5;
+    double sampling_ratio = 6;
+    google.protobuf.Duration batch_timeout = 7;
+    google.protobuf.Duration export_timeout = 8;
+    int32 max_queue_size = 9;
+    int32 max_export_batch_size = 10;
+    bool required = 11;
+    string service_name = 12;
+    string service_version = 13;
+    string environment = 14;
+    map<string, string> attributes = 15;
+  }
+  message Metrics {
+    bool enabled = 1;
+    string exporter = 2;
+    string endpoint = 3;
+    map<string, string> headers = 4;
+    bool insecure = 5;
+    google.protobuf.Duration interval = 6;
+    bool disable_runtime_stats = 7;
+    bool required = 8;
+    map<string, string> resource_attributes = 9;
+    optional bool grpc_enabled = 10;
+    optional bool grpc_include_health = 11;
+  }
+  map<string, string> global_attributes = 1;
+  Tracing tracing = 2;
+  Metrics metrics = 3;
+}
+
+message Messaging {
+  PubSub pubsub = 1;
+  OutboxPublisher outbox = 2;
+  InboxConsumer inbox = 3;
+  // Profile engagement Outbox 订阅配置（profile.engagement.* 事件）
+  PubSub engagement = 4;
+}
+
+message PubSub {
+  string project_id = 1;
+  string topic_id = 2;
+  string subscription_id = 3;
+  bool ordering_key_enabled = 4;
+  bool logging_enabled = 5;
+  bool metrics_enabled = 6;
+  string emulator_endpoint = 7;
+  google.protobuf.Duration publish_timeout = 8;
+  Receive receive = 9;
+  bool exactly_once_delivery = 10;
+  string dead_letter_topic_id = 11;
+}
+
+message Receive {
+  int32 num_goroutines = 1;
+  int32 max_outstanding_messages = 2;
+  int32 max_outstanding_bytes = 3;
+  google.protobuf.Duration max_extension = 4;
+  google.protobuf.Duration max_extension_period = 5;
+}
+
+message OutboxPublisher {
+  int32 batch_size = 1;
+  google.protobuf.Duration tick_interval = 2;
+  google.protobuf.Duration initial_backoff = 3;
+  google.protobuf.Duration max_backoff = 4;
+  int32 max_attempts = 5;
+  google.protobuf.Duration publish_timeout = 6;
+  int32 workers = 7;
+  google.protobuf.Duration lock_ttl = 8;
+  optional bool logging_enabled = 9;
+  optional bool metrics_enabled = 10;
+}
+
+message InboxConsumer {
+  string source_service = 1;
+  int32 max_concurrency = 2;
+  optional bool logging_enabled = 3;
+  optional bool metrics_enabled = 4;
+}

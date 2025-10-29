@@ -1,0 +1,179 @@
+# 顶层 server 配置：入站 gRPC 服务与 JWT 校验
+server:
+  # gRPC 网络相关配置
+  grpc:
+    # 监听地址，0.0.0.0 表示绑定所有网卡
+    addr: 0.0.0.0:9000
+    # 单次请求的超时时间
+    timeout: 5s
+  handlers:
+    # 默认超时（当未配置专用超时时）
+    default_timeout: 5s
+    # 写模型命令类 RPC 超时
+    command_timeout: 5s
+    # 读模型查询类 RPC 超时
+    query_timeout: 3s
+  # metadata_keys 声明需要透传的 Header。命名约定：
+  # - 平台默认的用户身份来自 X-Apigateway-Api-Userinfo（API Gateway 注入）
+  # - 仅在当前服务使用的 header 仍以 x-md- 开头，但不会由客户端中间件继续下传
+  metadata_keys:
+    # X-Apigateway-Api-Userinfo: GCP API Gateway 验证后的 JWT payload（Base64Url）
+    - x-apigateway-api-userinfo
+    # x-md-*: 默认保留 x-md- 前缀，便于扩展元数据
+    - x-md-
+    # x-md-idempotency-key: 当前服务的幂等键（仅本服务使用）
+    - x-md-idempotency-key
+    # x-md-if-match: 条件写入的版本匹配（仅本服务使用）
+    - x-md-if-match
+    # x-md-if-none-match: 条件读取/缓存验证（仅本服务使用）
+    - x-md-if-none-match
+    # （Post-MVP）若重新启用操作者审计，可在此追加 x-md-actor-type / x-md-actor-id
+  # Cloud Run JWT 权限验证（入站）
+  jwt:
+    # 预期的 audience，生产环境填写 Cloud Run URL，本地可留空
+    expected_audience: ""
+    # 是否跳过验证，本地开发可设为 true，生产必须 false；为 true 时下方 required 不再生效
+    skip_validate: true
+    # 是否强制要求携带 Token（仅在 skip_validate=false 时生效）；允许匿名路由但希望解析 Token 时可设为 false
+    required: true
+    # 从哪个 Header 读取 Token，默认 authorization
+    header_key: authorization
+
+# data 节点：数据库与出站 gRPC 客户端配置
+data:
+  # PostgreSQL / Supabase 配置
+  postgres:
+    # DSN 占位（运行时需通过 DATABASE_URL 环境变量覆盖）
+    dsn: ""
+
+    # 最大打开连接数
+    max_open_conns: 4
+    # 最小空闲连接数
+    min_open_conns: 1
+    # 连接最大生命周期
+    max_conn_lifetime: 3600s
+    # 空闲连接最大保留时长
+    max_conn_idle_time: 1800s
+    # 健康检查周期
+    health_check_period: 60s
+
+    # 默认 schema（Supabase 推荐使用 catalog）
+    schema: catalog
+    # Supabase Pooler 模式要求禁用 prepared statements
+    prepared_statements_enabled: false
+    # 是否上报连接池指标
+    pool_metrics_enabled: true
+    # 事务管理默认参数（TxManager 使用）
+    transaction:
+      # 默认隔离级别：read_committed / serializable / repeatable_read / read_uncommitted
+      default_isolation: read_committed
+      # 单次事务超时时间
+      default_timeout: 3s
+      # 锁等待超时，避免长时间阻塞
+      lock_timeout: 1s
+      # 建议最大重试次数（遇到 ErrRetryableTx 时由业务决定是否重试）
+      max_retries: 3
+      # 是否启用 TxManager 指标
+      metrics_enabled: true
+
+  # 出站 gRPC 客户端配置，target 留空表示禁用
+  grpc_client:
+    # 目标服务地址，例如 dns:///service.run.app:443
+    target: ""
+    # Cloud Run JWT 注入（出站）
+    jwt:
+      # 目标服务的 audience，启用时需填写 Cloud Run URL
+      audience: "placeholder"
+      # 是否禁用中间件，默认为 true 便于本地开发
+      disabled: true
+      # 注入 Token 的 Header 名称
+      header_key: authorization
+    # 仅列出需要继续往下游传播的键
+    metadata_keys:
+      # 仅透传跨服务身份；操作者字段留待 Post-MVP 再启用
+      - x-apigateway-api-userinfo
+      # 同步透传 x-md- 前缀，兼容所有内部元数据
+      - x-md-
+
+# 可观测性配置：追踪与指标
+observability:
+  # 全局标签，附加到指标/追踪/日志
+  global_attributes:
+    # 服务所属分组标签
+    service.group: template
+    # 部署区域标签
+    region: local
+  # OpenTelemetry 追踪配置
+  tracing:
+    # 是否启用追踪
+    enabled: false
+    # 追踪导出方式
+    exporter: stdout
+    # 采样比例，1.0 表示全采样
+    sampling_ratio: 1.0
+    # 是否要求追踪初始化成功
+    required: false
+  # OpenTelemetry 指标配置
+  metrics:
+    # 是否启用指标
+    enabled: false
+    # 指标导出方式
+    exporter: stdout
+    # 指标导出间隔
+    interval: 60s
+    # 是否关闭 Go runtime 指标
+    disable_runtime_stats: false
+    # 是否要求指标初始化成功
+    required: false
+    # 是否启用 gRPC 指标采集
+    grpc_enabled: true
+    # 是否包含健康检查 RPC 指标
+    grpc_include_health: false
+
+# 消息系统配置：Pub/Sub 与 Outbox 发布器
+messaging:
+  pubsub:
+    project_id: smiling-landing-472320-q0
+    topic_id: catalog.video.events
+    subscription_id: catalog.video.events.catalog-reader
+    dead_letter_topic_id: catalog.video.events.dlq
+    ordering_key_enabled: true
+    logging_enabled: true
+    metrics_enabled: true
+    emulator_endpoint: "" # 本地使用 emulator 时设置 localhost:8085
+    publish_timeout: 5s
+    receive:
+      num_goroutines: 4
+      max_outstanding_messages: 500
+      max_outstanding_bytes: 67108864 # 64 MiB
+      max_extension: 60s
+      max_extension_period: 600s
+    exactly_once_delivery: true
+  engagement:
+    project_id: smiling-landing-472320-q0
+    topic_id: profile.engagement.events
+    subscription_id: catalog.profile-engagement.consumer
+    logging_enabled: true
+    metrics_enabled: true
+    receive:
+      num_goroutines: 4
+      max_outstanding_messages: 1000
+      max_outstanding_bytes: 67108864
+      max_extension: 60s
+      max_extension_period: 600s
+  outbox:
+    batch_size: 100
+    tick_interval: 1s
+    initial_backoff: 2s
+    max_backoff: 120s
+    max_attempts: 20
+    publish_timeout: 10s
+    workers: 4
+    lock_ttl: 120s
+    logging_enabled: true
+    metrics_enabled: true
+  inbox:
+    source_service: catalog
+    max_concurrency: 4
+    logging_enabled: true
+    metrics_enabled: true
