@@ -9,7 +9,6 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
 	"github.com/bionicotaku/lingo-services-profile/internal/repositories"
 	"github.com/bionicotaku/lingo-services-profile/internal/tasks/catalog_inbox"

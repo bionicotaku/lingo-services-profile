@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-
 	"github.com/bionicotaku/lingo-services-profile/internal/controllers"
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/configloader"
 	"github.com/bionicotaku/lingo-services-profile/internal/infrastructure/grpc_server"

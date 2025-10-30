@@ -51,6 +51,14 @@ func wireApp(context.Context, configloader.Params) (*kratos.App, func(), error) 
 		// clients.ProviderSet,    // 暂时不使用, 未来需要调用外部服务时再启用
 		repositories.ProviderSet, // 数据访问层（sqlc）
 		services.ProviderSet,     // 业务逻辑层
+		wire.Bind(new(services.ProfileUsersRepository), new(*repositories.ProfileUsersRepository)),
+		wire.Bind(new(services.EngagementsRepository), new(*repositories.ProfileEngagementsRepository)),
+		wire.Bind(new(services.EngagementStatsRepository), new(*repositories.ProfileVideoStatsRepository)),
+		wire.Bind(new(services.WatchLogsRepository), new(*repositories.ProfileWatchLogsRepository)),
+		wire.Bind(new(services.WatchStatsRepository), new(*repositories.ProfileVideoStatsRepository)),
+		wire.Bind(new(services.OutboxEnqueuer), new(*repositories.OutboxRepository)),
+		wire.Bind(new(services.VideoProjectionRepository), new(*repositories.ProfileVideoProjectionRepository)),
+		wire.Bind(new(services.VideoStatsRepository), new(*repositories.ProfileVideoStatsRepository)),
 		wire.Bind(new(services.ProfileServiceInterface), new(*services.ProfileService)),
 		wire.Bind(new(services.EngagementServiceInterface), new(*services.EngagementService)),
 		wire.Bind(new(services.WatchHistoryServiceInterface), new(*services.WatchHistoryService)),

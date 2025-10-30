@@ -8,6 +8,7 @@
 - ✅ 基线校验：`make lint`（go vet + buf lint + staticcheck + revive）与 `go test ./...` 全量通过；Proto 生成现仅包含 Profile 契约，旧的 catalog API 已清理。
 - ✅ 新增：补齐 `VideoStatsService` gomock 单测、扩展 `ProfileHandler.ListFavorites` 分支覆盖，新增 `ListWatchHistory` 异常分支单测，并在 README 加入 `go generate ./internal/services/mocks` 与 Docker/Testcontainers 前置说明。
 - ✅ Outbox 事件指标完善：Engagement/WatchHistory 服务现记录 Outbox enqueue 成功/失败指标，并新增 watch-progress Outbox runner 集成测试覆盖。
+- ✅ 新增 `wire check` 单测：`go test ./...` 会自动执行 `wire check`（覆盖 `cmd/grpc`、`cmd/tasks/catalog_inbox`、`cmd/tasks/outbox`），避免漏写 Bind/Provider。
 - 🔧 待办重点：完善 WatchHistory Outbox 任务指标上报（持续监控 backlog/lag）；实现 Catalog 投影 Inbox Runner 的上线监控策略；扩展控制层/服务层单测覆盖剩余异常分支（例如 Problem Details 其他 Handler）；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
 - ✅ 已完成：移除根目录 `go.work` / `go.work.sum` Workspace，`services-profile` 显式依赖 `github.com/bionicotaku/lingo-services-catalog v0.1.0`（2025-10-30），并复验 `go mod tidy`、`make lint`、`go test ./...` 均通过。
 - 🎯 下一步：优先实现 WatchHistory 事件链路，其次落地 Inbox Runner 与测试，收尾阶段聚焦单测补强与文档/契约更新。
