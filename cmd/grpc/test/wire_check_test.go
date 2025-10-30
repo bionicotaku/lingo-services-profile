@@ -1,4 +1,4 @@
-package main
+package cmdgrpc_test
 
 import (
 	"os/exec"
@@ -8,13 +8,13 @@ import (
 )
 
 // TestWireProviderSets 确保 wire ProviderSet 在当前提交下可以成功解析。
-// 通过执行 `wire check`，即便开发者忘记手动运行 go generate，也能在 go test 阶段立即暴露缺失的 Bind / Provider。
+// 测试会执行 `wire check` 覆盖核心任务入口，一旦缺少 Bind/Provider，将在 go test 阶段立刻失败。
 func TestWireProviderSets(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot resolve runtime caller information")
 	}
-	moduleRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	moduleRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 	packages := []string{
 		"./cmd/grpc",
 		"./cmd/tasks/catalog_inbox",
