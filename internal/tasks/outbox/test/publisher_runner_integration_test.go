@@ -27,8 +27,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.opentelemetry.io/otel/attribute"
 	metricapi "go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 var defaultOutboxConfig = outboxcfg.Config{
@@ -128,6 +130,22 @@ func TestPublisherRunner_SuccessfulPublish(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("runner did not stop in time")
 	}
+
+	metricsData := collectOutboxMetrics(t, reader)
+	successPoints := sumDataPoints(metricsData, "outbox_publish_success_total")
+	require.NotEmpty(t, successPoints, "expected success counter datapoints")
+	require.True(t, hasAttributeValue(successPoints, "outbox.result", "success"))
+
+	latencyPoints := histogramFloatDataPoints(metricsData, "outbox_publish_latency_ms")
+	require.NotEmpty(t, latencyPoints, "expected latency histogram datapoints")
+
+	lagPoints := histogramFloatDataPoints(metricsData, "outbox_publish_lag_ms")
+	require.NotEmpty(t, lagPoints, "expected lag histogram datapoints")
+
+	backlogPoints := gaugeInt64DataPoints(metricsData, "outbox_backlog")
+	require.NotEmpty(t, backlogPoints, "expected backlog gauge datapoints")
+	lastBacklog := backlogPoints[len(backlogPoints)-1]
+	require.Equal(t, int64(0), lastBacklog.Value, "backlog should settle at zero after publish")
 }
 
 func TestPublisherRunner_RetryOnFailure(t *testing.T) {
@@ -516,4 +534,74 @@ func applyMigrations(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 func boolPtr(v bool) *bool {
 	b := v
 	return &b
+}
+
+func collectOutboxMetrics(t *testing.T, reader *sdkmetric.ManualReader) metricdata.ResourceMetrics {
+	t.Helper()
+	var data metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &data))
+	return data
+}
+
+func sumDataPoints(data metricdata.ResourceMetrics, name string) []metricdata.DataPoint[int64] {
+	var out []metricdata.DataPoint[int64]
+	for _, scope := range data.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name != name {
+				continue
+			}
+			if sum, ok := m.Data.(metricdata.Sum[int64]); ok {
+				out = append(out, sum.DataPoints...)
+			}
+		}
+	}
+	return out
+}
+
+func histogramFloatDataPoints(data metricdata.ResourceMetrics, name string) []metricdata.HistogramDataPoint[float64] {
+	var out []metricdata.HistogramDataPoint[float64]
+	for _, scope := range data.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name != name {
+				continue
+			}
+			if hist, ok := m.Data.(metricdata.Histogram[float64]); ok {
+				out = append(out, hist.DataPoints...)
+			}
+		}
+	}
+	return out
+}
+
+func gaugeInt64DataPoints(data metricdata.ResourceMetrics, name string) []metricdata.DataPoint[int64] {
+	var out []metricdata.DataPoint[int64]
+	for _, scope := range data.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name != name {
+				continue
+			}
+			if gauge, ok := m.Data.(metricdata.Gauge[int64]); ok {
+				out = append(out, gauge.DataPoints...)
+			}
+		}
+	}
+	return out
+}
+
+func hasAttributeValue(points []metricdata.DataPoint[int64], key, value string) bool {
+	for _, dp := range points {
+		attrs := attributeMap(dp.Attributes)
+		if v, ok := attrs[key]; ok && v.AsString() == value {
+			return true
+		}
+	}
+	return false
+}
+
+func attributeMap(set attribute.Set) map[string]attribute.Value {
+	out := make(map[string]attribute.Value, set.Len())
+	for _, kv := range set.ToSlice() {
+		out[string(kv.Key)] = kv.Value
+	}
+	return out
 }

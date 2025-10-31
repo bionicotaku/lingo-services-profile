@@ -10,6 +10,7 @@
 - ✅ Outbox 事件指标完善：Engagement/WatchHistory 服务现记录 Outbox enqueue 成功/失败指标，并新增 watch-progress Outbox runner 集成测试覆盖。
 - ✅ 新增 `wire check` 单测：`go test ./...` 会自动执行 `wire check`（覆盖 `cmd/grpc`、`cmd/tasks/catalog_inbox`、`cmd/tasks/outbox`），避免漏写 Bind/Provider。
 - 🔧 待办重点：完善 WatchHistory Outbox 任务指标上报（持续监控 backlog/lag）；实现 Catalog 投影 Inbox Runner 的上线监控策略；扩展控制层/服务层单测覆盖剩余异常分支（例如 Problem Details 其他 Handler）；同步文档（README/ARCHITECTURE）与 OpenAPI/Proto 契约。
+- 🚧 新增：开展 observability 集成（2025-10-31 启动）——包括统一指标命名、扩充 WatchHistory/Outbox/Catalog Inbox 指标、配置基线 YAML、测试与文档同步。
 - ✅ 已完成：移除根目录 `go.work` / `go.work.sum` Workspace，`services-profile` 显式依赖 `github.com/bionicotaku/lingo-services-catalog v0.1.0`（2025-10-30），并复验 `go mod tidy`、`make lint`、`go test ./...` 均通过。
 - 🎯 下一步：优先实现 WatchHistory 事件链路，其次落地 Inbox Runner 与测试，收尾阶段聚焦单测补强与文档/契约更新。
 
@@ -332,6 +333,10 @@ sqlc/
    - [x] 同步 `.env`、`.env.example`、`.env.test`，新增 PROFILE_* 与 OTEL/OTLP 环境变量占位。
    - [x] 更新 `cmd/grpc/wire.go` / `wire_gen.go`，仅注入 Profile 仓储与服务，移除模板生命周期绑定。
    - [ ] 评估缓存实现：若引入 Redis，新增配置与 init Provider；若仅 LRU，确保配置项可关闭。
+   - [ ] WatchHistory Outbox 指标补齐：新增 backlog/lag/重试指标，统一使用 `profile.outbox.*` 命名，并补充单元/集成测试验证。
+   - [ ] Catalog Inbox Runner 监控增强：引入 backlog gauge、重试计数与 `last_processed_at` 指标，维持投影链路可观测性。
+   - [ ] 抽象共用指标 helper（如 `internal/observability/metrics.go`），统一 `component/event_type/result` 标签，提高各任务复用度。
+   - [ ] 更新 `configs/config.yaml` 与文档，记录观测指标默认开关/告警阈值，确保追踪与指标配置在 README/ARCHITECTURE 中可见。
 
 9. **质量与验证**
    - [ ] `make lint`（含 gofumpt、goimports、staticcheck、revive、buf、spectral）。
