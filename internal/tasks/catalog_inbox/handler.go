@@ -63,10 +63,6 @@ func (h *eventHandler) Handle(ctx context.Context, sess txmanager.Session, evt *
 		handleErr = h.handleCreated(ctx, sess, evt, videoID, occurredAt)
 	case videov1.EventType_EVENT_TYPE_VIDEO_UPDATED:
 		handleErr = h.handleUpdated(ctx, sess, evt, videoID, occurredAt)
-	case videov1.EventType_EVENT_TYPE_VIDEO_MEDIA_READY:
-		handleErr = h.handleMediaReady(ctx, sess, evt, videoID, occurredAt)
-	case videov1.EventType_EVENT_TYPE_VIDEO_VISIBILITY_CHANGED:
-		handleErr = h.handleVisibilityChanged(ctx, sess, evt, videoID, occurredAt)
 	case videov1.EventType_EVENT_TYPE_VIDEO_DELETED:
 		handleErr = h.handleDeleted(ctx, sess, evt, videoID, occurredAt)
 	default:
@@ -156,92 +152,6 @@ func (h *eventHandler) handleUpdated(ctx context.Context, sess txmanager.Session
 
 	if err := h.projections.Upsert(ctx, sess, input); err != nil {
 		return fmt.Errorf("catalog inbox: upsert updated: %w", err)
-	}
-	return nil
-}
-
-func (h *eventHandler) handleMediaReady(ctx context.Context, sess txmanager.Session, evt *videov1.Event, videoID uuid.UUID, occurredAt time.Time) error {
-	payload := evt.GetMediaReady()
-	if payload == nil {
-		return errors.New("catalog inbox: media_ready payload missing")
-	}
-
-	current, err := h.loadCurrent(ctx, sess, videoID)
-	if err != nil {
-		return err
-	}
-	if current == nil {
-		h.log.WithContext(ctx).Debugw("msg", "catalog inbox: skip media_ready without projection", "video_id", videoID)
-		return nil
-	}
-
-	version := eventVersion(evt.GetVersion(), payload.GetVersion())
-	if !shouldApply(version, current.Version) {
-		h.log.WithContext(ctx).Debugw("msg", "catalog inbox: skip stale media_ready", "video_id", videoID, "event_version", version, "current_version", current.Version)
-		return nil
-	}
-
-	statusPtr := optionalStringPtr(payload.GetStatus())
-
-	input := repositories.UpsertVideoProjectionInput{
-		VideoID:           videoID,
-		Title:             defaultTitle(current.Title),
-		Description:       current.Description,
-		DurationMicros:    coalesceInt64(payload.DurationMicros, current.DurationMicros),
-		ThumbnailURL:      coalesceString(payload.ThumbnailUrl, current.ThumbnailURL),
-		HLSMasterPlaylist: coalesceString(payload.HlsMasterPlaylist, current.HLSMasterPlaylist),
-		Status:            coalesceStringValue(statusPtr, current.Status),
-		VisibilityStatus:  current.VisibilityStatus,
-		PublishedAt:       current.PublishedAt,
-		Version:           version,
-		UpdatedAt:         &occurredAt,
-	}
-
-	if err := h.projections.Upsert(ctx, sess, input); err != nil {
-		return fmt.Errorf("catalog inbox: upsert media_ready: %w", err)
-	}
-	return nil
-}
-
-func (h *eventHandler) handleVisibilityChanged(ctx context.Context, sess txmanager.Session, evt *videov1.Event, videoID uuid.UUID, occurredAt time.Time) error {
-	payload := evt.GetVisibilityChanged()
-	if payload == nil {
-		return errors.New("catalog inbox: visibility_changed payload missing")
-	}
-
-	current, err := h.loadCurrent(ctx, sess, videoID)
-	if err != nil {
-		return err
-	}
-	if current == nil {
-		h.log.WithContext(ctx).Debugw("msg", "catalog inbox: skip visibility change without projection", "video_id", videoID)
-		return nil
-	}
-
-	version := eventVersion(evt.GetVersion(), payload.GetVersion())
-	if !shouldApply(version, current.Version) {
-		h.log.WithContext(ctx).Debugw("msg", "catalog inbox: skip stale visibility change", "video_id", videoID, "event_version", version, "current_version", current.Version)
-		return nil
-	}
-
-	statusPtr := optionalStringPtr(payload.GetStatus())
-
-	input := repositories.UpsertVideoProjectionInput{
-		VideoID:           videoID,
-		Title:             defaultTitle(current.Title),
-		Description:       current.Description,
-		DurationMicros:    current.DurationMicros,
-		ThumbnailURL:      current.ThumbnailURL,
-		HLSMasterPlaylist: current.HLSMasterPlaylist,
-		Status:            coalesceStringValue(statusPtr, current.Status),
-		VisibilityStatus:  coalesceStringValue(payload.VisibilityStatus, current.VisibilityStatus),
-		PublishedAt:       coalesceTime(payload.PublishedAt, current.PublishedAt),
-		Version:           version,
-		UpdatedAt:         &occurredAt,
-	}
-
-	if err := h.projections.Upsert(ctx, sess, input); err != nil {
-		return fmt.Errorf("catalog inbox: upsert visibility change: %w", err)
 	}
 	return nil
 }

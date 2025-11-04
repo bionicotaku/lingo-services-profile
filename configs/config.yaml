@@ -136,9 +136,9 @@ messaging:
   topics:
     default:
       project_id: smiling-landing-472320-q0
-      topic_id: catalog.video.events
-      subscription_id: catalog.video.events.catalog-reader
-      dead_letter_topic_id: catalog.video.events.dlq
+      topic_id: profile.engagement.events
+      subscription_id: profile.engagement.events.catalog-runner
+      dead_letter_topic_id: profile.engagement.events.dlq
       ordering_key_enabled: true
       logging_enabled: true
       metrics_enabled: true
